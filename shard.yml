@@ -1,0 +1,16 @@
+name: kyaml
+version: 0.1.0
+
+description: |
+  KYAML - A Crystal implementation of Kubernetes YAML (KEP-5295): a safer,
+  less ambiguous YAML subset. Not whitespace-sensitive, allows comments and
+  trailing commas, always quotes string values.
+
+authors:
+  - lowkey <lowkey@kaffeinlabs.com>
+
+crystal: ">= 1.18.0"
+
+license: MIT
+
+repository: https://github.com/lowkeyliesmyth/kyaml
