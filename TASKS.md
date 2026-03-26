@@ -11,30 +11,95 @@
 
 ## Phase 2: Core Types & Error Handling
 
-- [ ] Implement `KYAML::Error` base exception class
-- [ ] Implement `KYAML::ParseError` for parse-time errors
-- [ ] Implement `KYAML::EmitError` for emit-time errors
-- [ ] Implement `KYAML::Any` type mirroring `YAML::Any` interface
-  - [ ] Support all scalar types (String, Int64, Float64, Bool, Nil)
-  - [ ] Support Hash and Array
-  - [ ] Implement `#as_s`, `#as_i`, `#as_f`, `#as_bool`, `#as_nil`, `#as_a`, `#as_h`
-  - [ ] Implement `#[]` and `#[]?` accessors
-  - [ ] Implement `#dig` and `#dig?` methods
+### Implementation
+- [X] Implement `KYAML::Error` base exception class
+- [X] Implement `KYAML::ParseError` for parse-time errors
+- [X] Implement `KYAML::EmitError` for emit-time errors
+- [X] Implement `KYAML::Any` type mirroring `YAML::Any` interface
+  - [X] Define `Type` alias (Nil, Bool, Int64, Float64, String, Array, Hash)
+  - [X] Support all scalar types (String, Int64, Float64, Bool, Nil)
+  - [X] Support Hash and Array
+  - [X] Implement `#as_s`, `#as_i`, `#as_f`, `#as_bool`, `#as_nil`, `#as_a`, `#as_h` (and `?` variants)
+  - [X] Implement `#as_i64`, `#as_i64?`, `#as_f32?`
+  - [X] Implement `#[]` and `#[]?` accessors
+  - [X] Implement `#dig` and `#dig?` methods
+  - [X] Implement `#size`
+  - [X] Implement `#==`, `#hash`, `#inspect`, `#to_s`, `#pretty_print`
+  - [X] Implement `#dup` and `#clone`
+  - [X] Implement `#to_json` and `#to_json_object_key`
+  - [X] Implement equality extensions (Object, Value, Struct, Reference, Array, Hash, Regex)
+  - [X] Numeric coercion constructors (`self.new(Int)`, `self.new(Float)`)
+  - [ ] Implement `self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)` factory
+    - [ ] Scalar branch: delegate to `YAML::Schema::Core.parse_scalar` for type resolution
+    - [ ] Sequence branch: recursively build `Array(KYAML::Any)` from child nodes
+    - [ ] Mapping branch: build `Hash(String, KYAML::Any)` with string key coercion/validation
+    - [ ] Alias branch: resolve anchor references recursively
+    - [ ] Raise on unknown node types
+
+### Unit Tests
+- [ ] Error class tests
+  - [ ] `KYAML::Error` can be raised and rescued
+  - [ ] `KYAML::ParseError` includes line/column in message
+  - [ ] `KYAML::ParseError` with partial location (line only, no location)
+  - [ ] `KYAML::EmitError` can be raised and rescued
+- [ ] `KYAML::Any` type accessor tests
+  - [ ] `#as_s` / `#as_s?` with String and non-String
+  - [ ] `#as_i` / `#as_i?` with Int64 and non-Int64
+  - [ ] `#as_i64` / `#as_i64?`
+  - [ ] `#as_f` / `#as_f?` with Float64, Int64 (coercion), and non-numeric
+  - [ ] `#as_f32?`
+  - [ ] `#as_bool` / `#as_bool?` with Bool and non-Bool
+  - [ ] `#as_nil` with Nil and non-Nil
+  - [ ] `#as_a` / `#as_a?` with Array and non-Array
+  - [ ] `#as_h` / `#as_h?` with Hash and non-Hash
+- [ ] `KYAML::Any` navigation tests
+  - [ ] `#[]` with Int index on Array
+  - [ ] `#[]` with String key on Hash
+  - [ ] `#[]` type mismatch raises (String on Array, Int on Hash)
+  - [ ] `#[]?` returns nil for missing key/out-of-bounds
+  - [ ] `#dig` through nested Hash/Array
+  - [ ] `#dig?` returns nil for missing path
+  - [ ] `#size` for Array, Hash, and raises for scalar
+- [ ] `KYAML::Any` edge case tests
+  - [ ] Wrapping nil raw value
+  - [ ] Empty Array and empty Hash
+  - [ ] Numeric coercion constructors (Int32 → Int64, Float32 → Float64)
+  - [ ] Equality: `KYAML::Any == KYAML::Any`, `KYAML::Any == raw value`
+  - [ ] `#dup` and `#clone` produce independent copies
+- [ ] `self.new(ctx, node)` factory tests
+  - [ ] Scalar resolution (string, int, float, bool, null)
+  - [ ] Nested mapping/sequence construction
+  - [ ] String key enforcement on mappings (reject non-string keys)
+  - [ ] Alias resolution
+  - [ ] Unknown node type raises
 
 ## Phase 3: Parser Implementation
 
+### Implementation
 - [ ] Implement `KYAML.parse(input : String | IO) : KYAML::Any`
   - [ ] Delegate to `YAML::Nodes` for low-level parsing
-  - [ ] Convert YAML node tree to `KYAML::Any`
-  - [ ] Handle type coercion (Norway bug awareness for documentation)
+  - [ ] Wire up `KYAML::Any.new(ctx, node)` as the node-to-Any conversion path
+  - [ ] Decide scalar resolution strategy: reuse `YAML::Schema::Core.parse_scalar` vs custom
+  - [ ] Document Norway bug behavior: KYAML parser accepts YAML 1.1 coercions on input (emitter prevents them on output)
+  - [ ] Decide anchor/alias policy: support, reject with error, or silently resolve
+  - [ ] Validate mapping keys resolve to strings (raise `ParseError` if not)
 - [ ] Implement `KYAML.parse_all(input : String | IO, &block)`
   - [ ] Support multi-document streams
   - [ ] Yield each document as `KYAML::Any`
 - [ ] Implement `KYAML.parse_all(input : String | IO) : Array(KYAML::Any)`
   - [ ] Non-block variant returning array
 
+### Unit Tests
+- [ ] Valid KYAML input (flow-style mappings, sequences, scalars)
+- [ ] Valid YAML input that is not KYAML-subset (block-style) — parses without error
+- [ ] Multi-document streams (`parse_all` block and array variants)
+- [ ] Malformed YAML raises `ParseError`
+- [ ] Non-string mapping keys raise `ParseError`
+- [ ] Norway bug values (`NO`, `yes`, `On`, etc.) resolve per YAML 1.1 on input
+
 ## Phase 4: Emitter Implementation
 
+### Implementation
 - [ ] Implement `KYAML::Emitter` class
   - [ ] Track indentation level
   - [ ] Track cuddling state
@@ -70,8 +135,19 @@
   - [ ] Document separator header (`---`)
   - [ ] Trailing newline
 
+### Unit Tests
+- [ ] Scalar rendering (int, float, bool, null, string)
+- [ ] String escaping (special chars, unicode, control chars, multi-line)
+- [ ] Key quoting (safe keys unquoted, ambiguous keys quoted)
+- [ ] Mapping rendering (braces, indentation, trailing commas)
+- [ ] Sequence rendering (brackets, indentation, trailing commas)
+- [ ] Cuddling behavior (all-mappings cuddled, mixed-types uncuddled)
+- [ ] Empty collections (`{}` and `[]`)
+- [ ] Document separator (`---`) and trailing newline
+
 ## Phase 5: Public API
 
+### Implementation
 - [ ] Implement `KYAML.emit(object, io : IO)`
   - [ ] Accept any object, convert via JSON-like serialization
 - [ ] Implement `KYAML.emit(object) : String`
@@ -82,9 +158,24 @@
   - [ ] String-returning variant
 - [ ] Implement `KYAML.emit_all(objects : Array, io : IO)`
   - [ ] Multi-document emission
+- [ ] Resolve `Any#to_yaml` duplication (two conflicting `to_yaml(io)` overloads)
+
+### Unit Tests
+- [ ] `KYAML.emit` produces valid KYAML string
+- [ ] `KYAML.emit` with IO variant
+- [ ] `Object#to_kyaml` extension works on basic types
+- [ ] `KYAML.emit_all` produces multi-document output
+- [ ] Round-trip: `KYAML.parse(KYAML.emit(object))` preserves data
+
+### Integration Tests
+- [ ] Round-trip tests (parse → emit → parse → compare)
+- [ ] Norway bug prevention: `NO`, `no`, `N`, `YES`, `yes`, `Y`, `On`, `Off` emitted as quoted strings
+- [ ] Sexagesimal number tests (`11:00` emitted as quoted string)
+- [ ] Timestamp-like string tests (emitted as quoted string)
 
 ## Phase 6: KYAML::Serializable
 
+### Implementation
 - [ ] Implement `KYAML::Serializable` module
   - [ ] `#to_kyaml` instance method
   - [ ] `.from_kyaml(string_or_io)` class method
@@ -101,50 +192,32 @@
 - [ ] Support nilable fields and default values
 - [ ] Support `use_yaml_discriminator` for polymorphic deserialization
 
+### Unit Tests
+- [ ] Basic struct serialization (to_kyaml / from_kyaml)
+- [ ] Nested objects
+- [ ] Arrays and hashes as fields
+- [ ] Field annotations (key rename, ignore, emit_null, presence)
+- [ ] Strict mode raises on unknown keys
+- [ ] Unmapped fields captured correctly
+- [ ] Nilable fields and default values
+- [ ] after_initialize callback invoked
+
 ## Phase 7: Builder API (Optional Enhancement)
 
+### Implementation
 - [ ] Implement `KYAML::Builder` for streaming output
   - [ ] `#document(&block)`
   - [ ] `#mapping(&block)`
   - [ ] `#sequence(&block)`
   - [ ] `#scalar(value)`
 
-## Phase 8: Testing
-
 ### Unit Tests
-- [ ] `KYAML::Any` tests
-  - [ ] Type accessors
-  - [ ] Navigation methods
-  - [ ] Edge cases (nil, empty)
-- [ ] Parser tests
-  - [ ] Valid KYAML input
-  - [ ] Valid YAML input (non-KYAML subset)
-  - [ ] Multi-document streams
-  - [ ] Error cases
-- [ ] Emitter tests
-  - [ ] Scalar types
-  - [ ] String escaping (special chars, unicode, multi-line)
-  - [ ] Key quoting (ambiguous vs safe keys)
-  - [ ] Mapping rendering
-  - [ ] Sequence rendering
-  - [ ] Cuddling behavior
-  - [ ] Empty collections
-- [ ] Serializable tests
-  - [ ] Basic struct serialization
-  - [ ] Nested objects
-  - [ ] Arrays and hashes
-  - [ ] Annotations
-  - [ ] Strict mode
-  - [ ] Unmapped fields
+- [ ] Builder produces valid KYAML output
+- [ ] Nested document/mapping/sequence structure
+- [ ] Scalar values rendered correctly
 
-### Integration Tests
-- [ ] Round-trip tests (parse → emit → parse → compare)
-- [ ] Norway bug prevention tests
-  - [ ] `NO`, `no`, `N`, `YES`, `yes`, `Y`, `On`, `Off` preserved as strings
-- [ ] Sexagesimal number tests (`11:00` as string)
-- [ ] Timestamp-like string tests
+## Phase 8: Compatibility Tests (Stretch Goal)
 
-### Compatibility Tests (Stretch Goal)
 - [ ] Port Go reference implementation test cases
 - [ ] Output parity verification
 
@@ -172,5 +245,3 @@
 ---
 
 ## Discovered During Work
-
-<!-- New tasks discovered during implementation go here -->

@@ -1,2 +1,4 @@
-module Kyaml
+require "./kyaml/*"
+
+module KYAML
 end

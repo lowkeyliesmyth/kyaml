@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-describe Kyaml do
+describe KYAML do
   # TODO: Write tests
 
   it "works" do
