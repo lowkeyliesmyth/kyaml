@@ -35,7 +35,7 @@ struct KYAML::Any
   # - KYAML has no binary or set types, so Bytes and Set are omitted
   # - KYAML requires all map keys to be strings (JSON compatibility constraint)
 
-  alias Type = Nil | Bool | Int64 | Float64 | String | Array(KYAML::Any) | Hash(String, KYAML::Any)
+  alias Type = Array(KYAML::Any) | Bool | Float64 | Hash(String, KYAML::Any) | Int64 | String | Nil
 
   getter raw : Type
 
