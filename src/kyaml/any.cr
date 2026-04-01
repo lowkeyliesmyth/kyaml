@@ -1,6 +1,8 @@
+require "yaml"
+
 # KYAML::Any is a wrapper around all possible KYAML value types
 # and can be used for traversing dynamic or unknown KYAML/YAML structures.
-# Mirrors the YAML::Any interface for familiarity.
+# Mirrors the `YAML::Any` interface for familiarity.
 #
 # See https://github.com/crystal-lang/crystal/blob/master/src/yaml/any.cr
 #
@@ -21,13 +23,10 @@
 # data["foo"]["bar"]["baz"].as_a    # => [KYAML::Any("qux"), KYAML::Any("fox")]
 # ```
 #
-# Note that methods used to traverse a KYAML structure, `#[]`, `#[]?` and `#each`,
-# always return a `KYAML::Any` to allow further traversal. To convert them to `String`,
-# `Array`, etc., use the `as_` methods, such as `#as_s`, `#as_a`, which perform
-# a type check against the raw underlying value. This means that invoking `#as_s`
-# when the underlying value is not a `String` will raise: the value won't automatically
-# be converted/parsed to a `String`. There are also nil-able variants (`#as_i?`, `#as_s?`, ...),
-# which return `nil` when the underlying value type won't match.
+# Note that methods used to traverse a KYAML structure (`#[]`, `#[]?`, `#each`), always return a `KYAML::Any` to allow further traversal.
+# To convert them to `String`, `Array`, etc., use the `as_` methods (eg `#as_s`, `#as_a`) which perform a type check against the raw underlying value.
+# This means that invoking `#as_s` when the underlying value is not a `String` will raise and the value won't automaticallybe converted/parsed to a `String`.
+# There are also nil-able variants (eg `#as_i?`, `#as_s?`) which return `nil` when the underlying value type won't match.
 struct KYAML::Any
   # All valid KYAML value types.
   # Notable deviations from core YAML::Any:
@@ -38,6 +37,40 @@ struct KYAML::Any
   alias Type = Array(KYAML::Any) | Bool | Float64 | Hash(String, KYAML::Any) | Int64 | String | Nil
 
   getter raw : Type
+
+  # Deserializes a `KYAML::Any` from a YAML node tree.
+  #
+  # This is the primary factory method for building a `KYAML::Any` from parsed YAML.
+  # It reuses stdlib `YAML::ParseContext`, `YAML::Nodes`, and `YAML::Schema::Core` for the heavy lifting.
+  #
+  # - *Scalar*: delegates to `YAML::Schema::Core.parse_scalar(node)`. Deviation from YAML::Any in that KYAML treats Time and Bytes as quoted Strings.
+  # - *Sequence*: delegates to `Array(KYAML::Any).new(ctx, node)` from stdlib `from_yaml.cr`, which calls back here for each child element.
+  # - *Mapping*: delegates to `Hash(String, KYAML::Any).new(ctx, node)` which enforces String keys and uses `YAML::Schema::Core.each` for merge-key (aka `<<`) resolution.
+  # - *Alias*: resolves the anchor reference and calls back here.
+  def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+    case node
+    when YAML::Nodes::Scalar
+      value = YAML::Schema::Core.parse_scalar(node)
+      case value
+      when Time, Bytes
+        new(node.value)
+      else
+        new(value)
+      end
+    when YAML::Nodes::Sequence
+      new(Array(KYAML::Any).new(ctx, node))
+    when YAML::Nodes::Mapping
+      new(Hash(String, KYAML::Any).new(ctx, node))
+    when YAML::Nodes::Alias
+      if anchor_value = node.value
+        new(ctx, anchor_value)
+      else
+        raise KYAML::ParseError.new("YAML alias node is missing its anchor value")
+      end
+    else
+      raise KYAML::ParseError.new("Unexpected YAML node type: #{node.class}")
+    end
+  end
 
   # Create a `KYAML::Any` to wrap the given `Type`.
   def initialize(@raw : Type)

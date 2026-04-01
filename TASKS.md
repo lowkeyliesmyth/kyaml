@@ -29,10 +29,10 @@
   - [X] Implement `#to_json` and `#to_json_object_key`
   - [X] Implement equality extensions (Object, Value, Struct, Reference, Array, Hash, Regex)
   - [X] Numeric coercion constructors (`self.new(Int)`, `self.new(Float)`)
-  - [ ] Implement `self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)` factory
-    - [ ] Scalar branch: delegate to `YAML::Schema::Core.parse_scalar` for type resolution
-    - [ ] Sequence branch: recursively build `Array(KYAML::Any)` from child nodes
-    - [ ] Mapping branch: build `Hash(String, KYAML::Any)` with string key coercion/validation
+  - [X] Implement `self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)` factory
+    - [X] Scalar branch: delegate to `YAML::Schema::Core.parse_scalar` for type resolution
+    - [X] Sequence branch: recursively build `Array(KYAML::Any)` from child nodes
+    - [X] Mapping branch: build `Hash(String, KYAML::Any)` with string key coercion/validation
     - [ ] Alias branch: resolve anchor references recursively
     - [ ] Raise on unknown node types
 
