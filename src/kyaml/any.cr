@@ -121,6 +121,8 @@ struct KYAML::Any
       else
         raise "Expected Hash for #[](String), not #{object.class}"
       end
+    else
+      raise "Expected Array or Hash for #[], not #{object.class}"
     end
   end
 
@@ -240,7 +242,7 @@ struct KYAML::Any
   #
   # Otherwise raises.
   def as_i : Int32
-    @raw.as?(Int64).to_i
+    @raw.as(Int64).to_i
   end
 
   # Checks that the underlying value is `Int64` and returns its value as `Int32`.
