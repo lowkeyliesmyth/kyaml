@@ -3,6 +3,16 @@ module KYAML
   class Error < Exception
   end
 
+  # Raised when a KYAML::Any value is accessed as an incompatible type
+  class TypeError < Error
+    getter expected : String
+    getter actual : String
+
+    def initialize(@expected : String, @actual : String)
+      super("Expected #{expected}, got #{actual}")
+    end
+  end
+
   # Raised when parsing KYAML/YAML fails
   # SHOW ME THE MONEY..err FAILURE
   class ParseError < Error

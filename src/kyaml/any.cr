@@ -1,4 +1,5 @@
 require "yaml"
+require "./error"
 
 # KYAML::Any is a wrapper around all possible KYAML value types
 # and can be used for traversing dynamic or unknown KYAML/YAML structures.
@@ -98,7 +99,7 @@ struct KYAML::Any
     when Hash
       object.size
     else
-      raise "Expected Array or Hash for #size, not #{object.class}"
+      raise KYAML::TypeError.new("Array or Hash", object.class)
     end
   end
 
@@ -113,16 +114,16 @@ struct KYAML::Any
       if index_or_key.is_a?(Int)
         object[index_or_key]
       else
-        raise "Expected Array for #[](Int), not #{object.class}"
+        raise KYAML::TypeError.new("Array", object.class.to_s)
       end
     when Hash
       if index_or_key.is_a?(String)
         object[index_or_key]
       else
-        raise "Expected Hash for #[](String), not #{object.class}"
+        raise KYAML::TypeError.new("Hash", object.class.to_s)
       end
     else
-      raise "Expected Array or Hash for #[], not #{object.class}"
+      raise KYAML::TypeError.new("Array or Hash", object.class.to_s)
     end
   end
 
@@ -146,7 +147,7 @@ struct KYAML::Any
         nil
       end
     else
-      raise "Expected Array or Hash, not #{object.class}"
+      raise KYAML::TypeError.new("Array or Hash", object.class.to_s)
     end
   end
 
