@@ -428,6 +428,7 @@ end
 
 class Regex
   def ===(other : KYAML::Any)
+    # ameba:disable Lint/UselessAssign
     value = self === other.raw
     $~ = $~
   end
