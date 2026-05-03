@@ -389,8 +389,10 @@ struct KYAML::Any
 end
 
 # Equality extensions to allow `value == kyaml_any` comparison.
-# Matches the YAML::Any stdlib patterns.
-class Object
+# Matches the upstream YAML::Any stdlib patterns, but deviates in implementation.
+#  Upstream defines `===` only on `Object` and does not unwrap `raw` before the `is_a?` check. Switched here to define override on `Class` so that case-equality unwraps to `raw` when receiver is a Type.
+# Why? `Class#===(other)` shadows `Object#===(other)`, requiring overriding on Class instead.
+class Class
   def ===(other : KYAML::Any)
     self === other.raw
   end
@@ -426,10 +428,13 @@ class Hash
   end
 end
 
+# Deviation from stdlib `YAML::Any`: upstream.
+# $~ = $~` raises `NilAssertionError` when the regex didn't match, so guard it.
+# The `if value` guard skips propagation on a match failure, so now the falsey path returns clean.
 class Regex
   def ===(other : KYAML::Any)
-    # ameba:disable Lint/UselessAssign
     value = self === other.raw
-    $~ = $~
+    $~ = $~ if value
+    value
   end
 end
