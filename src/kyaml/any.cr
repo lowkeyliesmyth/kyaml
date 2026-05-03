@@ -99,7 +99,7 @@ struct KYAML::Any
     when Hash
       object.size
     else
-      raise KYAML::TypeError.new("Array or Hash", object.class)
+      raise KYAML::TypeError.new("Array or Hash", "#{object.class}")
     end
   end
 
