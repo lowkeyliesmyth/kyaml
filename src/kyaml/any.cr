@@ -26,9 +26,10 @@ require "./error"
 # ```
 #
 # Note that methods used to traverse a KYAML structure (`#[]`, `#[]?`, `#each`), always return a `KYAML::Any` to allow further traversal.
-# To convert them to `String`, `Array`, etc., use the `as_` methods (eg `#as_s`, `#as_a`) which perform a type check against the raw underlying value.
-# This means that invoking `#as_s` when the underlying value is not a `String` will raise and the value won't automaticallybe converted/parsed to a `String`.
-# There are also nil-able variants (eg `#as_i?`, `#as_s?`) which return `nil` when the underlying value type won't match.
+#
+# To extract the underlying scalar to `String`, `Array`, etc., use the `as_` methods (eg `#as_s`, `#as_a`) which perform a type check against the raw underlying value.
+# Invoking `#as_s` when the underlying value is not a `String` will raise and the value is not auto-converted.
+# Nilable variants (eg `#as_i?`, `#as_s?`) return `nil` instead of raising when the type doesn't match.
 struct KYAML::Any
   # All valid KYAML value types.
   # Notable deviations from core YAML::Any:
@@ -187,6 +188,28 @@ struct KYAML::Any
   # :nodoc:
   def dig(index_or_key : Int | String) : KYAML::Any
     self[index_or_key]
+  end
+
+  # Iterates over underlying `Array` or `Hash`, yielding two values per iteration.
+  #
+  # `Array`: yields  index and element as `(Int32, KYAML::Any)` pairs. Use `_` to discard index (eg. any.each { |_, elem| ... })
+  # `Hash`: yields key and value as `(String, KYAML::Any)` pairs.
+  #
+  # Note: The block's first parameter is typed `Int32 | String` and may require `.as(...)` in strict-typed call sites.
+  # Raises if underlying value is neither `Array` nor `Hash`.
+  def each(&) : Nil
+    case object = @raw
+    when Array
+      object.each_with_index do |elem, index|
+        yield index, elem
+      end
+    when Hash
+      object.each do |k, v|
+        yield k, v
+      end
+    else
+      raise KYAML::TypeError.new("Array or Hash", "#{object.class}")
+    end
   end
 
   # Checks that the underlying value is `nil`, and returns `nil`.

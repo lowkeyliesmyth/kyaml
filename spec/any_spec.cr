@@ -264,6 +264,71 @@ describe KYAML::Any do
       end
     end
 
+    describe "#each" do
+      it "yields (index, element) pairs when raw is an Array" do
+        arr = [KYAML::Any.new("a"), KYAML::Any.new("b"), KYAML::Any.new("c")]
+        any = KYAML::Any.new(arr)
+        collected = [] of {Int32, KYAML::Any}
+        any.each do |idx, elem|
+          collected << {idx.as(Int32), elem.as(KYAML::Any)}
+        end
+        collected.should eq([{0, KYAML::Any.new("a")}, {1, KYAML::Any.new("b")}, {2, KYAML::Any.new("c")}])
+      end
+
+      it "yields (key, value) pairs when raw is a Hash" do
+        hash = {"a" => KYAML::Any.new("foo"), "b" => KYAML::Any.new("bar")}
+        any = KYAML::Any.new(hash)
+        collected = {} of String => KYAML::Any
+        any.each do |k, v|
+          collected[k.as(String)] = v.as(KYAML::Any)
+        end
+        collected.should eq(hash)
+      end
+
+      it "yields zero-based contiguous indices for Array" do
+        any = KYAML::Any.new([KYAML::Any.new("a"), KYAML::Any.new("b"), KYAML::Any.new("c")])
+        indices = [] of Int32
+        any.each do |idx, _|
+          indices << idx.as(Int32)
+        end
+        indices.should eq([0, 1, 2])
+      end
+
+      it "preserves Hash insert order" do
+        hash = {"first" => KYAML::Any.new(1), "second" => KYAML::Any.new(2), "third" => KYAML::Any.new(3)}
+        any = KYAML::Any.new(hash)
+        keys = [] of String
+        any.each do |k, _|
+          keys << k.as(String)
+        end
+        keys.should eq(["first", "second", "third"])
+      end
+
+      it "iterates zero times for an empty array" do
+        any = KYAML::Any.new([] of KYAML::Any)
+        count = 0
+        any.each { |_, _| count += 1 }
+        count.should eq(0)
+      end
+
+      it "iterates zero times for empty hash" do
+        any = KYAML::Any.new({} of String => KYAML::Any)
+        count = 0
+        any.each { |_, _| count += 1 }
+        count.should eq(0)
+      end
+
+      it "raises for scalar types" do
+        a_string = KYAML::Any.new("scalar")
+        a_int = KYAML::Any.new(42)
+        a_nil = KYAML::Any.new(nil)
+
+        expect_raises(KYAML::TypeError, /Expected Array or Hash/) { a_string.each { |_, _| } }
+        expect_raises(KYAML::TypeError, /Expected Array or Hash/) { a_int.each { |_, _| } }
+        expect_raises(KYAML::TypeError, /Expected Array or Hash/) { a_nil.each { |_, _| } }
+      end
+    end
+
     describe "#size" do
       it "returns size of an Array" do
         any = KYAML::Any.new([KYAML::Any.new(1), KYAML::Any.new(2), KYAML::Any.new(3)])
