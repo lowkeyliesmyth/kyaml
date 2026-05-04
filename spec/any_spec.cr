@@ -528,29 +528,140 @@ describe KYAML::Any do
         any.raw.should eq("hello")
         any.raw.should be_a(String)
       end
-      pending "resolves a quoted string"
-      pending "resolves an integer"
-      pending "resolves a negative integer"
-      pending "resolves zero"
-      pending "resolves a negative float"
-      pending "resolves infinity"
-      pending "resolves negative infinity"
-      pending "resolves NaN"
-      pending "resolves true"
-      pending "resolves false"
-      pending "resolves a null"
-      pending "resolves empty scalar as null"
-      pending "resolves tilde as null"
-      # KYAML accepts YAML 1.1 boolean aliases (Norway bug) on input
-      pending "resolves yes/no as booleans (Norway bug on input)"
-      pending "resolves on/off as booleans (YAML 1.1)"
-      # KYAML treates timestamps as strings
-      pending "resolves timestamps as strings (KYAML deviation)"
-      pending "resolves quoted booleans as strings"
-      pending "resolves quoted numbers as strings"
-      pending "resolves quoted null as string"
-      pending "resolves octal integer"
-      pending "resolves hex integer"
+
+      it "resolves a quoted string" do
+        any = kyaml_from_yaml(%("hello world"))
+        any.raw.should eq("hello world")
+        any.raw.should be_a(String)
+      end
+
+      it "resolves an integer" do
+        any = kyaml_from_yaml("42")
+        any.raw.should eq(42_i64)
+        any.raw.should be_a(Int64)
+      end
+
+      it "resolves a negative integer" do
+        any = kyaml_from_yaml("-42")
+        any.raw.should eq(-42_i64)
+        any.raw.should be_a(Int64)
+      end
+
+      it "resolves zero" do
+        any = kyaml_from_yaml("0")
+        any.raw.should eq(0_i64)
+      end
+
+      it "resolves a float" do
+        any = kyaml_from_yaml("3.14")
+        any.raw.should eq(3.14_f64)
+        any.raw.should be_a(Float64)
+      end
+
+      it "resolves a negative float" do
+        any = kyaml_from_yaml("-3.14")
+        any.raw.should eq(-3.14_f64)
+        any.raw.should be_a(Float64)
+      end
+
+      it "resolves infinity" do
+        # TIL .inf represents infinity in YAML
+        any = kyaml_from_yaml(".inf")
+        any.raw.should eq(Float64::INFINITY)
+      end
+
+      it "resolves negative infinity" do
+        any = kyaml_from_yaml("-.inf")
+        any.raw.should eq(-Float64::INFINITY)
+      end
+
+      it "resolves NaN" do
+        any = kyaml_from_yaml(".nan")
+        # Commented out because this will always be false for NaN. TIL it's expected that NaN != NaN.
+        # any.raw.should eq(Float64::NAN)
+        any.raw.should be_a(Float64)
+        (any.raw.as(Float64).nan?).should be_true
+      end
+
+      it "resolves true" do
+        any = kyaml_from_yaml("true")
+        any.raw.should be_true
+      end
+
+      it "resolves false" do
+        any = kyaml_from_yaml("false")
+        any.raw.should be_false
+      end
+
+      it "resolves a null" do
+        any = kyaml_from_yaml("null")
+        any.raw.should be_nil
+      end
+
+      it "resolves empty scalar as null" do
+        any = kyaml_from_yaml("")
+        any.raw.should be_nil
+      end
+
+      it "resolves tilde as null" do
+        any = kyaml_from_yaml("~")
+        any.raw.should be_nil
+      end
+
+      it "resolves yes/no as booleans (Norway bug) on input" do
+        # KYAML accepts YAML 1.1 boolean aliases (Norway bug) on input. But prevents emitting them on output.
+        # We're just testing that KYAML can parse them on input as bools correctly here.
+        kyaml_from_yaml("yes").raw.should be_true
+        kyaml_from_yaml("YES").raw.should be_true
+        kyaml_from_yaml("no").raw.should be_false
+        kyaml_from_yaml("NO").raw.should be_false
+      end
+
+      it "resolves on/off as booleans (YAML 1.1)" do
+        kyaml_from_yaml("on").raw.should be_true
+        kyaml_from_yaml("off").raw.should be_false
+      end
+
+      it "resolves timestamps as strings" do
+        # KYAML specific deviation from YAML 1.1
+        # Timestamps are parsed as strings
+        any = kyaml_from_yaml("2026-01-31")
+        anyz = kyaml_from_yaml("2026-01-01T00:00:00Z")
+        any.raw.should be_a(String)
+        anyz.raw.should be_a(String)
+
+        any.as_s.should eq("2026-01-31")
+        anyz.as_s.should eq("2026-01-01T00:00:00Z")
+      end
+
+      it "resolves quoted booleans as strings" do
+        any = kyaml_from_yaml(%("true"))
+        any.raw.should be_a(String)
+        any.as_s.should eq("true")
+      end
+
+      it "resolves quoted numbers as strings" do
+        any = kyaml_from_yaml(%("42"))
+        any.raw.should be_a(String)
+        any.as_s.should eq("42")
+      end
+
+      it "resolves quoted null as string" do
+        any = kyaml_from_yaml(%("null"))
+        any.raw.should be_a(String)
+        any.as_s.should eq("null")
+      end
+      it "resolves octal integers" do
+        any = kyaml_from_yaml("0o52")
+        any.raw.should be_a(Int64)
+        any.raw.should eq(42_i64)
+      end
+
+      it "resolves hex integers" do
+        any = kyaml_from_yaml("0x2a")
+        any.raw.should be_a(Int64)
+        any.raw.should eq(42_i64)
+      end
     end
     describe "sequence construction" do
       pending "builds an array from a YAML sequence"
