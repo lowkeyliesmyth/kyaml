@@ -664,11 +664,46 @@ describe KYAML::Any do
       end
     end
     describe "sequence construction" do
-      pending "builds an array from a YAML sequence"
-      pending "builds an Array from a block-style sequence"
-      pending "builds an empty ARray from empty sequence"
-      pending "builds nested Arrays"
-      pending "builds a sequence with mixed types"
+      it "builds an array from a YAML sequence" do
+        any = kyaml_from_yaml("[1, 2, 3]")
+        any.raw.should be_a(Array(KYAML::Any))
+        any.as_a.size.should eq(3)
+        any[0].as_i64.should eq(1_i64)
+        any[1].as_i64.should eq(2_i64)
+        any[2].as_i64.should eq(3_i64)
+      end
+
+      it "builds an Array from a block-style sequence" do
+        yaml = <<-YAML
+        - foo
+        - bar
+        - baz
+        YAML
+        any = kyaml_from_yaml(yaml)
+        any.as_a.size.should eq(3)
+        any[0].as_s.should eq("foo")
+      end
+
+      it "builds an empty Array from empty sequence" do
+        any = kyaml_from_yaml("[]")
+        any.as_a.should be_empty
+      end
+
+      it "builds nested Arrays" do
+        any = kyaml_from_yaml("[[1, 2], [3, 4]]")
+        any.as_a.size.should eq(2)
+        any[0][0].as_i64.should eq(1_i64)
+        any[1][1].as_i64.should eq(4_i64)
+      end
+
+      it "builds a sequence with mixed types" do
+        any = kyaml_from_yaml(%([1, "foo", 3.14, null, true]))
+        any[0].as_i64.should eq(1_i64)
+        any[1].as_s.should eq("foo")
+        any[2].as_f.should eq(3.14)
+        any[3].as_nil.should be_nil
+        any[4].as_bool.should be_true
+      end
     end
 
     describe "mapping constructs" do
