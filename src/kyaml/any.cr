@@ -1,3 +1,4 @@
+require "json"
 require "yaml"
 require "./error"
 
@@ -25,9 +26,10 @@ require "./error"
 # ```
 #
 # Note that methods used to traverse a KYAML structure (`#[]`, `#[]?`, `#each`), always return a `KYAML::Any` to allow further traversal.
-# To convert them to `String`, `Array`, etc., use the `as_` methods (eg `#as_s`, `#as_a`) which perform a type check against the raw underlying value.
-# This means that invoking `#as_s` when the underlying value is not a `String` will raise and the value won't automaticallybe converted/parsed to a `String`.
-# There are also nil-able variants (eg `#as_i?`, `#as_s?`) which return `nil` when the underlying value type won't match.
+#
+# To extract the underlying scalar to `String`, `Array`, etc., use the `as_` methods (eg `#as_s`, `#as_a`) which perform a type check against the raw underlying value.
+# Invoking `#as_s` when the underlying value is not a `String` will raise and the value is not auto-converted.
+# Nilable variants (eg `#as_i?`, `#as_s?`) return `nil` instead of raising when the type doesn't match.
 struct KYAML::Any
   # All valid KYAML value types.
   # Notable deviations from core YAML::Any:
@@ -99,7 +101,7 @@ struct KYAML::Any
     when Hash
       object.size
     else
-      raise KYAML::TypeError.new("Array or Hash", object.class)
+      raise KYAML::TypeError.new("Array or Hash", "#{object.class}")
     end
   end
 
@@ -186,6 +188,28 @@ struct KYAML::Any
   # :nodoc:
   def dig(index_or_key : Int | String) : KYAML::Any
     self[index_or_key]
+  end
+
+  # Iterates over underlying `Array` or `Hash`, yielding two values per iteration.
+  #
+  # `Array`: yields  index and element as `(Int32, KYAML::Any)` pairs. Use `_` to discard index (eg. any.each { |_, elem| ... })
+  # `Hash`: yields key and value as `(String, KYAML::Any)` pairs.
+  #
+  # Note: The block's first parameter is typed `Int32 | String` and may require `.as(...)` in strict-typed call sites.
+  # Raises if underlying value is neither `Array` nor `Hash`.
+  def each(&) : Nil
+    case object = @raw
+    when Array
+      object.each_with_index do |elem, index|
+        yield index, elem
+      end
+    when Hash
+      object.each do |k, v|
+        yield k, v
+      end
+    else
+      raise KYAML::TypeError.new("Array or Hash", "#{object.class}")
+    end
   end
 
   # Checks that the underlying value is `nil`, and returns `nil`.
@@ -389,8 +413,10 @@ struct KYAML::Any
 end
 
 # Equality extensions to allow `value == kyaml_any` comparison.
-# Matches the YAML::Any stdlib patterns.
-class Object
+# Matches the upstream YAML::Any stdlib patterns, but deviates in implementation.
+#  Upstream defines `===` only on `Object` and does not unwrap `raw` before the `is_a?` check. Switched here to define override on `Class` so that case-equality unwraps to `raw` when receiver is a Type.
+# Why? `Class#===(other)` shadows `Object#===(other)`, requiring overriding on Class instead.
+class Class
   def ===(other : KYAML::Any)
     self === other.raw
   end
@@ -426,10 +452,13 @@ class Hash
   end
 end
 
+# Deviation from stdlib `YAML::Any`: upstream.
+# $~ = $~` raises `NilAssertionError` when the regex didn't match, so guard it.
+# The `if value` guard skips propagation on a match failure, so now the falsey path returns clean.
 class Regex
   def ===(other : KYAML::Any)
-    # ameba:disable Lint/UselessAssign
     value = self === other.raw
-    $~ = $~
+    $~ = $~ if value
+    value
   end
 end

@@ -9,10 +9,11 @@ Documentation/DocumentationAdmonition:
   Description: Reports documentation admonitions
   Timezone: UTC
   Excluded:
-  - src/kyaml/any.cr
+    - src/kyaml/any.cr
+    - spec/any_spec.cr
   Admonitions:
-  - TODO
-  - FIXME
-  - BUG
+    - TODO
+    - FIXME
+    - BUG
   Enabled: true
   Severity: Warning
