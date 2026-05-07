@@ -707,29 +707,207 @@ describe KYAML::Any do
     end
 
     describe "mapping constructs" do
-      pending "builds a Hash from  a YAML mapping"
-      pending "builds a Hash from a block-style mapping"
-      pending "builds an empty Hash from empty mapping"
-      pending "buidls nested mappings"
-      pending "maps all keys as strings"
-      pending "builds mappings containing sequences"
-      pending "buidls sequences containing mappings"
+      it "builds a Hash from  a YAML mapping" do
+        any = kyaml_from_yaml("{a: 1, b: 2}")
+        any.raw.should be_a(Hash(String, KYAML::Any))
+        any["a"].as_i64.should eq(1_i64)
+        any["b"].as_i64.should eq(2_i64)
+      end
+      it "builds a Hash from a block-style mapping" do
+        yaml = <<-YAML
+          name: test
+          count: 42
+          YAML
+        any = kyaml_from_yaml(yaml)
+        any["name"].as_s.should eq("test")
+        any["count"].as_i64.should eq(42_i64)
+      end
+
+      it "builds an empty Hash from empty mapping" do
+        any = kyaml_from_yaml("{}")
+        any.as_h.should be_empty
+      end
+      it "builds nested mappings" do
+        yaml = <<-YAML
+        outer:
+          inner:
+            value: deep
+      YAML
+        any = kyaml_from_yaml(yaml)
+        any["outer"]["inner"]["value"].as_s.should eq("deep")
+      end
+
+      it "maps all keys as strings" do
+        # even keys that look like numbers or bools
+        yaml = "{1: one, true: yes, null: c}"
+        any = kyaml_from_yaml(yaml)
+        any.as_h.keys.each do |key|
+          key.should be_a(String)
+        end
+      end
+
+      it "builds mappings containing sequences" do
+        yaml = <<-YAML
+          items:
+          - one
+          - two
+        YAML
+        any = kyaml_from_yaml(yaml)
+        any["items"].as_a.size.should eq(2)
+        any["items"][0].as_s.should eq("one")
+      end
+
+      it "builds sequences containing mappings" do
+        yaml = <<-YAML
+        - name: finn
+          age: 15
+        - name: jake
+          age: 20
+      YAML
+        any = kyaml_from_yaml(yaml)
+        any[0]["name"].as_s.should eq("finn")
+        any[1]["age"].as_i64.should eq(20_i64)
+      end
     end
 
     describe "alias resolution" do
-      pending "resolves a scalar alias"
-      pending "resolves a sequence alias"
-      pending "resolves a mapping alias"
+      it "resolves a scalar alias" do
+        yaml = <<-YAML
+          - &anchor hello
+          - *anchor
+          YAML
+        any = kyaml_from_yaml(yaml)
+        any[0].as_s.should eq("hello")
+        any[1].as_s.should eq("hello")
+      end
+
+      it "resolves a sequence alias" do
+        yaml = <<-YAML
+        defaults: &defaults
+          adapter: postgres
+          host: localhost
+        prod:
+          <<: *defaults
+          host: prod-server
+        YAML
+        any = kyaml_from_yaml(yaml)
+        any["prod"]["adapter"].as_s.should eq("postgres")
+        any["prod"]["host"].as_s.should eq("prod-server")
+      end
+
+      it "resolves a mapping alias" do
+        yaml = <<-YAML
+          - &items
+            - a
+            - b
+          - *items
+        YAML
+        any = kyaml_from_yaml(yaml)
+        any[0].as_a.size.should eq(2)
+        any[1].as_a.size.should eq(2)
+        any[1][0].as_s.should eq("a")
+      end
     end
 
     describe "complex/realistic structures" do
-      pending "parses a Kubernetes-like manifest"
-      pending "parses a KYAML-style flow document"
-      pending "supports dig through a complex structure"
-    end
+      it "parses a Kubernetes-like manifest" do
+        yaml = <<-YAML
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: awesome-api
+            labels:
+              app: awesome-api
+          spec:
+            selector:
+              app: awesome-api
+            ports:
+            - name: http
+              port: 80
+              targetPort: 8080
+            - name: https
+              port: 443
+              targetPort: 8443
+      YAML
+        any = kyaml_from_yaml(yaml)
+        any["apiVersion"].as_s.should eq("v1")
+        any["kind"].as_s.should eq("Service")
+        any["metadata"]["name"].as_s.should eq("awesome-api")
+        any["spec"]["ports"].as_a.size.should eq(2)
+        any["spec"]["ports"][1]["targetPort"].as_i64.should eq(8443_i64)
+      end
 
-    describe "error handling" do
-      pending "raises KYAML::ParseError for alias with missing anchor value"
+      it "parses a KYAML-style flow document" do
+        yaml = <<-YAML
+          ---
+          {
+          apiVersion: "v1",
+          kind: "Service",
+          metadata: {
+            name: "awesome-api",
+            labels: {
+              app: "my-app",
+            },
+          },
+          spec: {
+            selector: {
+              app: "awesome-api",
+            },
+            ports: [{
+              name: "http",
+              port: 80,
+              targetPort: 8080,
+            },
+            {
+              name: "https",
+              port: 443,
+              targetPort: 8443,
+            }],
+          },
+          }
+          YAML
+        any = kyaml_from_yaml(yaml)
+        any["apiVersion"].as_s.should eq("v1")
+        any["metadata"]["labels"]["app"].as_s.should eq("my-app")
+        any["spec"]["ports"].as_a.size.should eq(2)
+        any["spec"]["ports"][1]["targetPort"].as_i64.should eq(8443_i64)
+      end
+      it "supports dig through a complex structure" do
+        yaml = <<-YAML
+        ---
+        {
+        apiVersion: "v1",
+        kind: "Service",
+        metadata: {
+          name: "awesome-api",
+          labels: {
+            app: "my-app",
+          },
+        },
+        spec: {
+          selector: {
+            app: "awesome-api",
+          },
+          ports: [{
+            name: "http",
+            port: 80,
+            targetPort: 8080,
+          },
+          {
+            name: "https",
+            port: 443,
+            targetPort: 8443,
+          }],
+        },
+        }
+        YAML
+        any = kyaml_from_yaml(yaml)
+        any.dig("spec", "ports", 0, "targetPort").as_i64.should eq(8080_i64)
+        any.dig?("metadata", "labels", "missing").should be_nil
+        expect_raises(KeyError) do
+          any.dig("metadata", "labels", "missing")
+        end
+      end
     end
   end
 end
