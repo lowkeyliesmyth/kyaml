@@ -14,6 +14,7 @@ module KYAML
   def self.parse(input : String | IO, *, strict : Bool = false) : KYAML::Any
     document = YAML::Nodes.parse(input)
     node = document.nodes.first? || empty_scalar
+    Validator.validate(node, strict)
     KYAML::Any.new(YAML::ParseContext.new, node)
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(
