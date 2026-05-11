@@ -83,7 +83,7 @@ module KYAML::Validator
   private def check_scalar_style(node : YAML::Nodes::Scalar) : Nil
     # return unless node.style.literal? || node.style.folded?
     if node.style.literal? || node.style.folded?
-      raise ScalarStyleError.new(
+      raise BlockStyleError.new(
         "Block scalar style #{node.style} is not allowed in KYAML strict mode",
         node.start_line,
         node.start_column,
