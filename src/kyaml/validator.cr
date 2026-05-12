@@ -93,7 +93,7 @@ module KYAML::Validator
 
   private def check_sequence_style(node : YAML::Nodes::Sequence) : Nil
     # return if node.style.flow?
-    if node.style.flow?
+    unless node.style.flow?
       raise BlockStyleError.new(
         "Block-style sequence is not allowed in KYAML strict mode",
         node.start_line,

@@ -68,13 +68,53 @@ describe "KYAML" do
       end
     end
 
-    it "raises KYAML::ParseError when a mapping key is not a string" do
+    it "raises KYAML::NonStringKeyError when a mapping key is not a scalar" do
       yaml = <<-YAML
-      ? [1, 2]
-      : value
-      YAML
-      expect_raises(KYAML::ParseError) do
+        ? [1, 2]
+        : value
+        YAML
+      expect_raises(KYAML::NonStringKeyError) do
         KYAML.parse(yaml)
+      end
+    end
+
+    context "strict mode" do
+      it "accepts pure flow-style KYAML without error as a positive control" do
+        yaml = %({foo: "bar", items: ["a", "b"], nested: {n: 1}})
+        any = KYAML.parse(yaml, strict: true)
+        any["foo"].should eq("bar")
+        any["items"][0].as_s.should eq("a")
+        any["nested"]["n"].as_i.should eq(1)
+      end
+
+      pending "rejects block-style sequence with a BlockStyleError" do
+      end
+
+      pending "rejects block-style mapping with a BlockStyleError" do
+      end
+
+      pending "rejects literal block scalars with a BlockStyleError" do
+      end
+
+      pending "rejects folded block scalars with a BlockStyleError" do
+      end
+
+      pending "rejects anchor declarations with AnchorError" do
+      end
+
+      pending "rejects explicit !!str tag with ExplicitTagError" do
+      end
+
+      pending "rejects explicit custom !Foo tag with ExplicitTagError" do
+      end
+
+      pending "rejects alias references with AliasError" do
+      end
+
+      pending "emits line and column of error location" do
+      end
+
+      pending "parse_all honors `strict:` keyword across multiple docs" do
       end
     end
   end
