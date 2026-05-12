@@ -73,7 +73,7 @@ module KYAML::Validator
     end
     if tag = node.tag
       raise ExplicitTagError.new(
-        "YAML tag '#{tag.inspect}' is not allowed in KYAML strict mode",
+        "YAML tag '#{tag}' is not allowed in KYAML strict mode",
         node.start_line,
         node.start_column,
       )

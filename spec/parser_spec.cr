@@ -87,34 +87,107 @@ describe "KYAML" do
         any["nested"]["n"].as_i.should eq(1)
       end
 
-      pending "rejects block-style sequence with a BlockStyleError" do
+      it "rejects block-style sequence with a BlockStyleError" do
+        yaml = <<-YAML
+          - 1
+          - 2
+        YAML
+        expect_raises(KYAML::BlockStyleError, /Block-style sequence/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects block-style mapping with a BlockStyleError" do
+      it "rejects block-style mapping with a BlockStyleError" do
+        yaml = <<-YAML
+          foo: bar
+          items:
+            - a
+            - b
+          nested:
+            n: 1
+        YAML
+        expect_raises(KYAML::BlockStyleError, /Block-style mapping/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects literal block scalars with a BlockStyleError" do
+      it "rejects literal block scalars with a BlockStyleError" do
+        yaml = <<-YAML
+          |
+            bar
+          YAML
+        expect_raises(KYAML::BlockStyleError, /Block scalar style LITERAL/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects folded block scalars with a BlockStyleError" do
+      it "rejects folded block scalars with a BlockStyleError" do
+        yaml = <<-YAML
+          >
+            bar
+          YAML
+        expect_raises(KYAML::BlockStyleError, /Block scalar style FOLDED/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects anchor declarations with AnchorError" do
+      it "rejects anchor declarations with AnchorError" do
+        yaml = <<-YAML
+          &foo
+          bar
+          YAML
+        expect_raises(KYAML::AnchorError, /Anchors are not/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects explicit !!str tag with ExplicitTagError" do
+      it "rejects explicit !!str tag with ExplicitTagError" do
+        yaml = <<-YAML
+          !!str foo
+          YAML
+        expect_raises(KYAML::ExplicitTagError, /YAML tag 'tag:yaml[^']*' is not allowed/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects explicit custom !Foo tag with ExplicitTagError" do
+      it "rejects explicit custom !Foo tag with ExplicitTagError" do
+        yaml = <<-YAML
+          !Foo bar
+          YAML
+        expect_raises(KYAML::ExplicitTagError, /YAML tag '!Foo' is not allowed/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "rejects alias references with AliasError" do
+      it "rejects anchor references with AnchorError" do
+        # Dude, I guess I have to define the anchor in flow style otherwise I keep hitting _other_ KYAML validation failures.
+        yaml = %({foo: &bar "value"})
+        expect_raises(KYAML::AnchorError, /Anchors are not allowed/) do
+          KYAML.parse(yaml, strict: true)
+        end
       end
 
-      pending "emits line and column of error location" do
+      it "rejects alias references with AliasError" do
+        # Creating the alias node directly is super annoying.
+        # In any valid YAML doc an alias requires a preceding anchor node in the same doc.
+        # But if we define an anchor node...then the test flags the invalid anchor node before it can get to the alias.
+        # And if we define the alias first, then the test flags it as invalid YAML. Honestly not even sure if this is worth testing.
+        alias_node = YAML::Nodes::Alias.new("foo")
+        expect_raises(KYAML::AliasError, /Aliases are not allowed/) do
+          KYAML::Validator.validate(alias_node, strict: true)
+        end
       end
 
-      pending "parse_all honors `strict:` keyword across multiple docs" do
+      it "parse_all honors `strict:` keyword across multiple docs" do
+        yaml = <<-YAML
+          ---
+          a: 1
+          ---
+          b: 2
+          YAML
+        expect_raises(KYAML::BlockStyleError) do
+          KYAML.parse_all(yaml, strict: true)
+        end
       end
     end
   end
