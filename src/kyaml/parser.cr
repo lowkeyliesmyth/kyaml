@@ -1,5 +1,6 @@
 require "yaml"
 require "./any"
+require "./comment"
 require "./error"
 require "./validator"
 
@@ -26,7 +27,7 @@ module KYAML
 
   # Parses a multi-doc K/YAML stream, block variant. Yields each doc into a `KYAML::Any`.
   #
-  # Each doc is validated independently, a violaation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block
+  # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
   def self.parse_all(input : String | IO, *, strict : Bool = false, & : KYAML::Any ->) : Nil
     YAML::Nodes.parse_all(input).each do |doc|
       node = doc.nodes.first? || empty_scalar

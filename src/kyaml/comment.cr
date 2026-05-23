@@ -23,7 +23,7 @@ end
 #
 # - `root`: the parsed K/YAML doc tree
 # - `comments`: a flat list of comments in source order. Multi-doc streams partition on `---`, so each doc only owns its own comments.
-struct KYAML::Document
+struct KYAML::Doc
   getter root : KYAML::Any
   getter comments : Array(KYAML::Comment)
 
