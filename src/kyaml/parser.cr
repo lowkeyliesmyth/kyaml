@@ -51,6 +51,47 @@ module KYAML
     docs
   end
 
+  # Parses a single K/YAML doc, returning a tree+comments `KYAML::Doc`.
+  #
+  # This is the comment-preserving entrypoint, where the returned `Doc` holds both a parsed K/YAML doc tree and its sister sidecar comments.
+  #
+  # If you don't need comments then use `KYAML.parse` instead.
+  #
+  # Follows the same lenient/strict modes as `parse`.
+  def self.parse_doc(input : String | IO, *, strict : Bool = false) : KYAML::Doc
+    text = input.is_a?(IO) ? input.gets_to_end : input
+    root = parse(text, strict: strict)
+
+    # TODO: replace with a comment scanner later
+    KYAML::Doc.new(root, [] of KYAML::Comment)
+  end
+
+  # Parses a multi-doc K/YAML stream, block variant.  Yields each doc as a `KYAML::Doc`.
+  # Each doc owns only its own comments, the scanner partitions the full comment list per doc by `---` separator.
+  #
+  # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
+  #
+  # If you don't need comments then use `KYAML.parse_all` instead.
+  #
+  # Returns an `Array(KYAML::Doc)` of all parsed docs.
+  def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Array(KYAML::Doc)
+    text = input.is_a?(IO) ? input.gets_to_end : input
+
+    # TODO: scan once here and partition per-doc before yielding
+    parse_all(text, strict: strict) do |root|
+      yield KYAML::Doc.new(root, [] of KYAML::Comment)
+    end
+  end
+
+  # Parses a multi-doc K/YAML stream, non-block variant. If you don't need comments then use `KYAML.parse_all` instead.
+  #
+  # Returns an `Array(KYAML::Doc)` of all parsed docs.
+  def self.parse_all_docs(input : String | IO, *, strict : Bool = false) : Array(KYAML::Doc)
+    docs = [] of KYAML::Doc
+    parse_all_docs(input, strict: strict) { |doc| docs << doc }
+    docs
+  end
+
   # Returns an empty scalar node.
   #
   # `YAML::Nodes.parse("")` returns a doc with no nodes. To ensure that `KYAML::Any.new(ctx, node)`  parses to `Nil` intead of raising, we have to create a dummy plain scalar node.
