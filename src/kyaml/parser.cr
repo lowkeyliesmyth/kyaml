@@ -72,9 +72,7 @@ module KYAML
   # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
   #
   # If you don't need comments then use `KYAML.parse_all` instead.
-  #
-  # Returns an `Array(KYAML::Doc)` of all parsed docs.
-  def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Array(KYAML::Doc)
+  def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Nil
     text = input.is_a?(IO) ? input.gets_to_end : input
 
     # TODO: scan once here and partition per-doc before yielding
