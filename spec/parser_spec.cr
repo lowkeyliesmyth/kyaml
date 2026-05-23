@@ -231,4 +231,57 @@ describe "KYAML" do
       end
     end
   end
+
+  describe "#parse_doc" do
+    it "returns a Doc with the parsed root and empty comments list (pre-scanner impl)" do
+      doc = KYAML.parse_doc(%({foo: "bar"}))
+      doc.root["foo"].as_s.should eq("bar")
+      doc.comments.should be_empty
+    end
+
+    it "honors `strict:` mode" do
+      expect_raises(KYAML::BlockStyleError) do
+        KYAML.parse_doc("foo: bar\nbaz: qux\n", strict: true)
+      end
+    end
+
+    it "propagates KAYML::ParseError on malformed input" do
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_doc("{unclosed: ")
+      end
+    end
+  end
+
+  describe "#parse_all_docs" do
+    it "returns one Doc per input doc in a multi-doc stream" do
+      docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
+      docs.size.should eq(2)
+      docs[0].root["foo"].as_i.should eq(1)
+      docs[1].root["bar"].as_i.should eq(2)
+      docs.each do |doc|
+        doc.comments.should be_empty
+      end
+    end
+
+    it "yields one Doc per input doc in a multi-doc stream (block form)" do
+      yaml = "---\nfoo: 1\n---\nbar: 2\n"
+      docs = [] of KYAML::Doc
+      KYAML.parse_all_docs(yaml) do |doc|
+        docs << doc
+      end
+      docs.size.should eq(2)
+      docs[0].root["foo"].as_i.should eq(1)
+      docs[1].root["bar"].as_i.should eq(2)
+    end
+
+    it "returns an empty arry for empty input" do
+      KYAML.parse_all_docs("").should eq([] of KYAML::Doc)
+    end
+
+    it "honors `strict:` mode across multiple docs" do
+      expect_raises(KYAML::BlockStyleError) do
+        KYAML.parse_all_docs("---\na: 1\n---\nb: 2\n", strict: true)
+      end
+    end
+  end
 end
