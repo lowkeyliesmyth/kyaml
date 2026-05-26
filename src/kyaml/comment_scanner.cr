@@ -30,8 +30,8 @@ module KYAML::CommentScanner
     column = 1
     # Tracks nesting depth of flow collection types
     flow_depth = 0
-    # used to validate comment start
-    prev_was_whitespace = true
+    # track if previous char state was whitespace, used to validate comment start
+    prev_was_ws = true
     # track if a block scalar indicator (|, >) was just seen and not yet entered
     pending_block_scalar = false
     # Column of the block scalar marker, used to detect when the block scalar ends
@@ -43,21 +43,57 @@ module KYAML::CommentScanner
     # Buffers the text content of the comment currently being scanned
     comment_buffer = String::Builder.new
 
+    reader = Char::Reader.new(text)
     while reader.has_next?
       char = reader.current_char
 
       case state
       in State::Normal
+        case char
+        when '#'
+          if prev_was_ws || column == 1
+            state = State::Comment
+            comment_start_line = line
+            comment_start_column = column
+            comment_buffer = String::Builder.new
+            column += 1
+            prev_was_ws = false
+          else
+            column += 1
+            prev_was_ws = false
+          end
+        when '\n'
+          line += 1
+          column = 1
+          prev_was_ws = true
+        when ' ', '\t'
+          column += 1
+          prev_was_ws = true
+        else
+          column += 1
+          prev_was_ws = false
+        end
+      in State::Comment
+        case char
+        when '\n'
+          result << KYAML::Comment.new(comment_buffer.to_s, comment_start_line, comment_start_column)
+          state = State::Normal
+          line += 1
+          column = 1
+          prev_was_ws = true
+        else
+          comment_buffer << char
+          column += 1
+        end
       in State::SingleQuoted
       in State::DoubleQuoted
-      in State::Comment
       in State::BlockScalar
       end
 
       reader.next_char
     end
 
-    # Flush a trailing coment that ended at EOF without a newline
+    # Flush any trailing comment that ended at EOF without a newline
     if state == State::Comment
       result << KYAML::Comment.new(comment_buffer.to_s, comment_start_line, comment_start_column)
     end
