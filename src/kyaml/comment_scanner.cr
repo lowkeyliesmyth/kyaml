@@ -62,6 +62,14 @@ module KYAML::CommentScanner
             column += 1
             prev_was_ws = false
           end
+        when '\''
+          state = State::SingleQuoted
+          column += 1
+          prev_was_ws = false
+        when '"'
+          state = State::DoubleQuoted
+          column += 1
+          prev_was_ws = false
         when '\n'
           line += 1
           column = 1
@@ -72,6 +80,50 @@ module KYAML::CommentScanner
         else
           column += 1
           prev_was_ws = false
+        end
+      in State::SingleQuoted
+        case char
+        when '\''
+          if reader.has_next? && reader.peek_next_char == '\''
+            # escaped single quote (''), consume both chars and stay in SingleQuoted
+            reader.next_char
+            column += 2
+          else
+            # closing quote, go back to normal
+            state = State::Normal
+            column += 1
+            prev_was_ws = false
+          end
+        when '\n'
+          line += 1
+          column = 1
+        else
+          column += 1
+        end
+      in State::DoubleQuoted
+        case char
+        when '\\'
+          # backslash escape. consume the `\` and the following char as a single unit
+          # escaped char _may_ be `\n` which resets line/column
+          column += 1
+          if reader.has_next?
+            reader.next_char
+            if reader.current_char == '\n'
+              line += 1
+              column = 1
+            else
+              column += 1
+            end
+          end
+        when '"'
+          state = State::Normal
+          column += 1
+          prev_was_ws = false
+        when '\n'
+          line += 1
+          column = 1
+        else
+          column += 1
         end
       in State::Comment
         case char
@@ -85,8 +137,6 @@ module KYAML::CommentScanner
           comment_buffer << char
           column += 1
         end
-      in State::SingleQuoted
-      in State::DoubleQuoted
       in State::BlockScalar
       end
 
