@@ -75,6 +75,14 @@ module KYAML::CommentScanner
         when ' ', '\t'
           column += 1
           prev_was_ws = true
+        when '[', '{'
+          flow_depth += 1
+          column += 1
+          prev_was_ws = false
+        when ']', '}'
+          flow_depth -= 1 if flow_depth > 0
+          column += 1
+          prev_was_ws = false
         else
           column += 1
           prev_was_ws = false
