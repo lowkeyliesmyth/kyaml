@@ -60,6 +60,26 @@ describe KYAML::CommentScanner do
       KYAML::CommentScanner.scan("").should be_empty
     end
 
+    it "captures comments inside flow sequences" do
+      comments = KYAML::CommentScanner.scan("[1, 2, # midstream\n 3]\n")
+      comments.size.should eq(1)
+      comments[0].text.should eq(" midstream")
+    end
+
+    it "captures comments inside flow mappings" do
+      comments = KYAML::CommentScanner.scan("foo: {bar: # comment\n baz: qux}\n")
+      comments.size.should eq(1)
+      comments[0].text.should eq(" comment")
+    end
+
+    it "handles nested flow collections without corrupting state" do
+      input = "{outer: [\n # nested comment\n 1, 2,\n], tail: 3 # outer comment"
+      comments = KYAML::CommentScanner.scan(input)
+      comments.size.should eq(2)
+      comments[0].text.should eq(" nested comment")
+      comments[1].text.should eq(" outer comment")
+    end
+
     it "ignores # inside double quoted strings" do
       comments = KYAML::CommentScanner.scan(%(foo: "a # not a comment" bar\n))
       comments.should be_empty
