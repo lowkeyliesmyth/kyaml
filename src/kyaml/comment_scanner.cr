@@ -20,8 +20,6 @@ module KYAML::CommentScanner
   def scan(text : String) : Array(KYAML::Comment)
     # Accumulates the final list of parsed comments to return
     result = [] of KYAML::Comment
-    # Iterates over each character in the input text
-    reader = Char::Reader.new(text)
     # Tracks the current lexer state (normal, quoted, comment, etc.)
     state = State::Normal
     # Tracks the current line number in the input

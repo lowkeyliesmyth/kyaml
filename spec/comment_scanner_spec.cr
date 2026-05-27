@@ -32,16 +32,6 @@ describe KYAML::CommentScanner do
       comments[0].text.should eq(" header")
       comments[0].line.should eq(1)
     end
-
-    pending "ignores # inside double quoted strings" do
-    end
-
-    pending "ignores # inside single quoted string" do
-    end
-
-    pending "ignores # inside literal block scalar" do
-    end
-
     it "honors whitespace-before-# rule" do
       comments = KYAML::CommentScanner.scan("foo#bar\n")
       comments.should be_empty
@@ -68,6 +58,67 @@ describe KYAML::CommentScanner do
 
     it "returns empty for empty input" do
       KYAML::CommentScanner.scan("").should be_empty
+    end
+
+    it "ignores # inside double quoted strings" do
+      comments = KYAML::CommentScanner.scan(%(foo: "a # not a comment" bar\n))
+      comments.should be_empty
+    end
+
+    pending "handles `\"` as an escaped double quote inside DoubleQuoted" do
+    end
+
+    pending "ignores # inside literal block scalar" do
+    end
+
+    describe "SingleQuoted state" do
+      it "ignores # inside single quoted string" do
+        comments = KYAML::CommentScanner.scan(%(foo: 'a # not a comment' bar))
+        comments.should be_empty
+      end
+
+      it "handles `''` as an escaped single quote inside SingleQuoted" do
+        # verifies the scanner doesn't prematurely exit SingleQuoted state
+        comments = KYAML::CommentScanner.scan(%(foo: 'a''b # still in string'\n))
+        comments.should be_empty
+      end
+
+      it "tracks line numbers across newlines inside SingleQuoted" do
+        comments = KYAML::CommentScanner.scan("foo: 'a\nnb'\n# after\n")
+        comments.size.should eq(1)
+        comments[0].text.should eq(" after")
+        comments[0].line.should eq(3)
+      end
+
+      it "handles a closing single quote at the final input position" do
+        # verifies that `has_next?` guard prevents `peek_next_char` from causing a crash
+        comments = KYAML::CommentScanner.scan("foo: 'a'")
+        comments.should be_empty
+      end
+
+      it "handles an unterminated single quote scalar at EOF" do
+        comments = KYAML::CommentScanner.scan("foo: 'unterminated")
+        comments.should be_empty
+      end
+
+      it "handles `''` as final characters inside SingleQuoted" do
+        # loop should terminate cleanly, verifies loop doesn't over-read
+        comments = KYAML::CommentScanner.scan(%(foo: 'a''))
+        comments.should be_empty
+      end
+
+      it "tracks columns correctly across multiple consecutive `''` escapes" do
+        comments = KYAML::CommentScanner.scan(%(foo: 'a''''b' # comment\n))
+        comments.size.should eq(1)
+        comments[0].text.should eq(" comment")
+        comments[0].column.should eq(15)
+      end
+
+      it "handles `''` escape followed by closing quote" do
+        comments = KYAML::CommentScanner.scan(%(foo: 'a''' # comment\n))
+        comments.size.should eq(1)
+        comments[0].text.should eq(" comment")
+      end
     end
   end
 end
