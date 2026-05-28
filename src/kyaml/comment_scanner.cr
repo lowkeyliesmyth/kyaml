@@ -105,7 +105,7 @@ module KYAML::CommentScanner
         when '|', '>'
           if flow_depth == 0 && (column == 1 || prev_was_ws)
             pending_block_scalar = true
-            parent_index = line_first_nonws_col - 1
+            parent_indent = line_first_nonws_col - 1
           end
           column += 1
           prev_was_ws = false

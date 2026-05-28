@@ -88,9 +88,6 @@ describe KYAML::CommentScanner do
     pending "handles `\"` as an escaped double quote inside DoubleQuoted" do
     end
 
-    pending "ignores # inside literal block scalar" do
-    end
-
     describe "SingleQuoted state" do
       it "ignores # inside single quoted string" do
         comments = KYAML::CommentScanner.scan(%(foo: 'a # not a comment' bar))
@@ -138,6 +135,64 @@ describe KYAML::CommentScanner do
         comments = KYAML::CommentScanner.scan(%(foo: 'a''' # comment\n))
         comments.size.should eq(1)
         comments[0].text.should eq(" comment")
+      end
+    end
+
+    describe "BlockScalar state" do
+      it "ignores # inside literal block scalar" do
+        input = "foo: |\n  # not a comment\n echo hi\nbar: 2\n"
+        KYAML::CommentScanner.scan(input).should be_empty
+      end
+
+      it "ignores # inside a folded block scalar" do
+        input = "foo: >\n  # not a comment\n folded text\nbar: 2\n"
+        KYAML::CommentScanner.scan(input).should be_empty
+      end
+
+      it "captures a header comment on the block line but ignores body #" do
+        # the `# header` shares the `|` line and must still be captured as a comment
+        # the `#` in the body must be ignored
+        input = "foo: | # header\n  body # not a comment\nbar: 2\n"
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" header")
+        comments[0].line.should eq(1)
+      end
+
+      it "captures a comment after the block scalar ends" do
+        input = "foo: |\n  body\n# after block\nbar: 2\n"
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" after block")
+        comments[0].line.should eq(3)
+        comments[0].column.should eq(1)
+      end
+
+      it "keeps blank lines and following # as block content" do
+        # empty line belongs to the block, indented `#` after it is still block content
+        input = "foo: |\n  line1\n\n  # still block content\nbar: 2\n"
+        KYAML::CommentScanner.scan(input).should be_empty
+      end
+
+      it "uses parent indent, not |/> column, to end the block" do
+        # oof
+        # guards against the marker-column bug, where the child body is indented deeper than the parent key but shallower than the | column
+        # the `#` is conent but dedented traililng # is captured as a comment
+        input = "parent:\n  child: |\n    body # nope\n  sibling: 2 # yup\n"
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" yup")
+      end
+
+      it "treats |/> inside a flow collection as a literal, not a block" do
+        # flow_depth > 0 disables block-scalar detection
+        comments = KYAML::CommentScanner.scan("{a: x|y} # tail\n")
+        comments.size.should eq(1)
+        comments[0].text.should eq(" tail")
+      end
+
+      it "handles a block scalar running to EOF without a trailing newline" do
+        KYAML::CommentScanner.scan("foo: |\n body").should be_empty
       end
     end
   end
