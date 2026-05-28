@@ -2,6 +2,12 @@ require "./spec_helper"
 
 describe "KYAML" do
   describe "#parse" do
+    it "ignores comments and exposes no comment data on plain parse" do
+      any = KYAML.parse("# comment\nfoo: bar\n")
+      any.should be_a(KYAML::Any)
+      any["foo"].as_s.should eq("bar")
+    end
+
     it "parses a flow-style mapping" do
       yaml = %({foo: "bar", baz: 42})
       any = KYAML.parse(yaml)
@@ -233,7 +239,7 @@ describe "KYAML" do
   end
 
   describe "#parse_doc" do
-    it "returns a Doc with the parsed root and empty comments list (pre-scanner impl)" do
+    it "returns a Doc with the parsed root and empty comments list when no comments present" do
       doc = KYAML.parse_doc(%({foo: "bar"}))
       doc.root["foo"].as_s.should eq("bar")
       doc.comments.should be_empty
@@ -250,9 +256,43 @@ describe "KYAML" do
         KYAML.parse_doc("{unclosed: ")
       end
     end
+
+    it "capturs a leading comment above a mapping pair" do
+      doc = KYAML.parse_doc("# title\nfoo: bar\n")
+      doc.root["foo"].as_s.should eq("bar")
+      doc.comments.map(&.text).should eq([" title"])
+      doc.comments[0].line.should eq(1)
+      doc.comments[0].column.should eq(1)
+    end
+
+    it "captures trailing inline comment on a scalar" do
+      doc = KYAML.parse_doc("foo: bar # inline\n")
+      doc.comments.size.should eq(1)
+      doc.comments[0].text.should eq(" inline")
+      doc.comments[0].line.should eq(1)
+    end
+
+    it "captures a standalone comment between flow sequence items" do
+      doc = KYAML.parse_doc("[\n 1,\n # mid\n 2,\n]\n")
+      doc.comments.map(&.text).should eq([" mid"])
+    end
+
+    it "captures a doc-header comment preceding ---" do
+      doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
+      doc.comments.map(&.text).should eq([" header"])
+    end
   end
 
   describe "#parse_all_docs" do
+    it "partitionts comments per doc by --- position" do
+      yaml = "# header for doc 0\n---\nfoo: 1 # trailing 0\n# between\n---\n# leading doc 1\nbar: 2\n"
+
+      docs = KYAML.parse_all_docs(yaml)
+      docs.size.should eq(2)
+      docs[0].comments.map(&.text).should eq([" header for doc 0", " trailing 0", " between"])
+      docs[1].comments.map(&.text).should eq([" leading doc 1"])
+    end
+
     it "returns one Doc per input doc in a multi-doc stream" do
       docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
       docs.size.should eq(2)
