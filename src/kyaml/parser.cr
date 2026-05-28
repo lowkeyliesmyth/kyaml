@@ -1,6 +1,7 @@
 require "yaml"
 require "./any"
 require "./comment"
+require "./comment_scanner"
 require "./error"
 require "./validator"
 
@@ -62,8 +63,7 @@ module KYAML
     text = input.is_a?(IO) ? input.gets_to_end : input
     root = parse(text, strict: strict)
 
-    # TODO: replace with a comment scanner later
-    KYAML::Doc.new(root, [] of KYAML::Comment)
+    KYAML::Doc.new(root, KYAML::CommentScanner.scan(text))
   end
 
   # Parses a multi-doc K/YAML stream, block variant.  Yields each doc as a `KYAML::Doc`.
@@ -74,11 +74,33 @@ module KYAML
   # If you don't need comments then use `KYAML.parse_all` instead.
   def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Nil
     text = input.is_a?(IO) ? input.gets_to_end : input
+    comments = KYAML::CommentScanner.scan(text)
+    # Collect the start line of each doc so comments can be bucketed by doc index
+    starts = YAML::Nodes.parse_all(text).map(&.start_line)
 
-    # TODO: scan once here and partition per-doc before yielding
-    parse_all(text, strict: strict) do |root|
-      yield KYAML::Doc.new(root, [] of KYAML::Comment)
+    # Bucket comments by doc index so they can be passed to `KYAML::Doc` constructor and paired with its associated `KYAML::Any` content
+    doc_buckets = Array(Array(KYAML::Comment)).new(starts.size) { [] of KYAML::Comment }
+    comments.each do |c|
+      idx = 0
+      starts.each_with_index do |start, i|
+        if c.line >= start
+          idx = i
+        end
+      end
+      doc_buckets[idx] << c unless doc_buckets.empty?
     end
+
+    i = 0
+    parse_all(text, strict: strict) do |root|
+      yield KYAML::Doc.new(root, doc_buckets[i])
+      i += 1
+    end
+  rescue ex : YAML::ParseException
+    raise KYAML::ParseError.new(
+      ex.message || "YAML parse error",
+      ex.line_number,
+      ex.column_number,
+    )
   end
 
   # Parses a multi-doc K/YAML stream, non-block variant. If you don't need comments then use `KYAML.parse_all` instead.
