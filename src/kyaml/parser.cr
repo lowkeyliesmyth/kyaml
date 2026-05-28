@@ -75,19 +75,20 @@ module KYAML
   def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Nil
     text = input.is_a?(IO) ? input.gets_to_end : input
     comments = KYAML::CommentScanner.scan(text)
-    # Collect the start line of each doc so comments can be bucketed by doc index
+
+    # impl note: `start_line` is 0-based (libyaml) while `Comment#line` is 1-based.
+    # `c.line >= start` below works despite the mismatch because `---` always occupies its own line and so a comment (1-based line) is always after the start of the doc start (0-based line)
     starts = YAML::Nodes.parse_all(text).map(&.start_line)
 
+    return if starts.empty?
     # Bucket comments by doc index so they can be passed to `KYAML::Doc` constructor and paired with its associated `KYAML::Any` content
     doc_buckets = Array(Array(KYAML::Comment)).new(starts.size) { [] of KYAML::Comment }
     comments.each do |c|
       idx = 0
       starts.each_with_index do |start, i|
-        if c.line >= start
-          idx = i
-        end
+        idx = i if c.line >= start
       end
-      doc_buckets[idx] << c unless doc_buckets.empty?
+      doc_buckets[idx] << c
     end
 
     i = 0
