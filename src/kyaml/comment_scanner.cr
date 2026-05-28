@@ -32,8 +32,16 @@ module KYAML::CommentScanner
     prev_was_ws = true
     # track if a block scalar indicator (|, >) was just seen and not yet entered
     pending_block_scalar = false
-    # Column of the block scalar marker, used to detect when the block scalar ends
-    block_scalar_marker_col = 0
+    # indent of block scalar's parent line (first non-ws column - 1)
+    parent_indent = 0
+    # true once a non-ws char is seen at column > parent_indent on the current line, confirming the line belongs to the block scalar
+    # resets to false on newlines.
+    # if a line reaches a non-ws char without being committed, the block scalar has ended.
+    block_line_committed = false
+
+    # column of first non-whitespace char on current line
+    # resets on newlines, captures parent indent when |/> marker is seen
+    line_first_nonws_col = 0
     # Line number where the current comment started
     comment_start_line = 0
     # Column number where the current comment started
@@ -44,9 +52,14 @@ module KYAML::CommentScanner
     reader = Char::Reader.new(text)
     while reader.has_next?
       char = reader.current_char
+      # when true, the current character is processed again on the next loop iteration, but now under the new state
+      reprocess = false
 
       case state
       in State::Normal
+        if line_first_nonws_col == 0 && char != ' ' && char != '\t' && char != '\n'
+          line_first_nonws_col = column
+        end
         case char
         when '#'
           if prev_was_ws || column == 1
@@ -69,9 +82,15 @@ module KYAML::CommentScanner
           column += 1
           prev_was_ws = false
         when '\n'
+          if pending_block_scalar
+            state = State::BlockScalar
+            pending_block_scalar = false
+          end
           line += 1
           column = 1
           prev_was_ws = true
+          line_first_nonws_col = 0
+          block_line_committed = false
         when ' ', '\t'
           column += 1
           prev_was_ws = true
@@ -81,6 +100,13 @@ module KYAML::CommentScanner
           prev_was_ws = false
         when ']', '}'
           flow_depth -= 1 if flow_depth > 0
+          column += 1
+          prev_was_ws = false
+        when '|', '>'
+          if flow_depth == 0 && (column == 1 || prev_was_ws)
+            pending_block_scalar = true
+            parent_index = line_first_nonws_col - 1
+          end
           column += 1
           prev_was_ws = false
         else
@@ -135,18 +161,44 @@ module KYAML::CommentScanner
         case char
         when '\n'
           result << KYAML::Comment.new(comment_buffer.to_s, comment_start_line, comment_start_column)
-          state = State::Normal
+          if pending_block_scalar
+            state = State::BlockScalar
+            pending_block_scalar = false
+          else
+            state = State::Normal
+          end
           line += 1
           column = 1
           prev_was_ws = true
+          line_first_nonws_col = 0
+          block_line_committed = false
         else
           comment_buffer << char
           column += 1
         end
       in State::BlockScalar
+        case char
+        when ' ', '\t'
+          column += 1
+        when '\n'
+          line += 1
+          column = 1
+          block_line_committed = false
+          prev_was_ws = true
+        else
+          if block_line_committed
+            column += 1
+          elsif column - 1 <= parent_indent
+            state = State::Normal
+            reprocess = true
+          else
+            block_line_committed = true
+            column += 1
+          end
+        end
       end
 
-      reader.next_char
+      reader.next_char unless reprocess
     end
 
     # Flush any trailing comment that ended at EOF without a newline
