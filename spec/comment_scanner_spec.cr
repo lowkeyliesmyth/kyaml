@@ -139,6 +139,47 @@ describe KYAML::CommentScanner do
     end
 
     describe "BlockScalar state" do
+      it "uses owning key's indent to end the block" do
+        # the parent keys' indent, not the line's first non-whitespace column, should be used as a marker
+        input = <<-YAML
+          - key: |
+                  body
+            sibling: 2 # tail
+        YAML
+
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" tail")
+      end
+
+      it "uses owning key's indent in a plain mapping" do
+        #
+        input = <<-YAML
+          key: |
+            body
+          sibling: 2 # tail
+        YAML
+
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" tail")
+      end
+
+      it "uses owning key's indent in a nested block sequence of mappings" do
+        input = "- - key: |\n    body\n- next: 2 # tail"
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" tail")
+      end
+
+      it "treats `-` followed by newline as an empty-entry sequence marker" do
+        # `-\n` is an empty entry, the non-empty entry owns the `|`.
+        input = "-\n- key: |\n        body\n- next: 2 # tail"
+        comments = KYAML::CommentScanner.scan(input)
+        comments.size.should eq(1)
+        comments[0].text.should eq(" tail")
+      end
+
       it "ignores # inside literal block scalar" do
         input = "foo: |\n  # not a comment\n echo hi\nbar: 2\n"
         KYAML::CommentScanner.scan(input).should be_empty

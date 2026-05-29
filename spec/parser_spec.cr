@@ -318,6 +318,16 @@ describe "KYAML" do
       KYAML.parse_all_docs("").should eq([] of KYAML::Doc)
     end
 
+    it "returns an empty array on comments-only input" do
+      KYAML.parse_all_docs("# only a comment\n").should be_empty
+    end
+
+    it "yields nothing on input with only comments but no yaml docs" do
+      yielded = 0
+      KYAML.parse_all_docs("\n# only a comment\n# another comment") { |_| yielded += 1 }
+      yielded.should eq(0)
+    end
+
     it "honors `strict:` mode across multiple docs" do
       expect_raises(KYAML::BlockStyleError) do
         KYAML.parse_all_docs("---\na: 1\n---\nb: 2\n", strict: true)

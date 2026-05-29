@@ -39,9 +39,12 @@ module KYAML::CommentScanner
     # if a line reaches a non-ws char without being committed, the block scalar has ended.
     block_line_committed = false
 
-    # column of first non-whitespace char on current line
-    # resets on newlines, captures parent indent when |/> marker is seen
-    line_first_nonws_col = 0
+    # column of the "owning node" on the current line, the column of the first content char after skipping any leading whitespace or `- `
+    # captures parent indent when `|/>` marker is seen and resets on newlines
+    key_indent_col = 0
+    # resets to true while we're scanning leading whitespace and `- ` markers at start of a newline.
+    # Flips to `false` on the first content char which locks in the `key_indent_col` value.
+    consuming_seq_markers = true
     # Line number where the current comment started
     comment_start_line = 0
     # Column number where the current comment started
@@ -57,8 +60,24 @@ module KYAML::CommentScanner
 
       case state
       in State::Normal
-        if line_first_nonws_col == 0 && char != ' ' && char != '\t' && char != '\n'
-          line_first_nonws_col = column
+        # when at the line's indent, skip leading `- ` markers and lock in the `key_indent_col` value at first real content char
+        if consuming_seq_markers
+          case char
+          when ' ', '\t', '\n'
+            # still in indent
+          when '-'
+            # `-` is a sequence marker only if followed by ws, tab, or newline. Otherwise it's a regular scalar
+            next_c = reader.has_next? ? reader.peek_next_char : '\0'
+            if next_c == ' ' || next_c == '\t' || next_c == '\n'
+              # this is a sequence marker, stay in indent scanning mode
+            else
+              key_indent_col = column
+              consuming_seq_markers = false
+            end
+          else
+            key_indent_col = column
+            consuming_seq_markers = false
+          end
         end
         case char
         when '#'
@@ -89,7 +108,8 @@ module KYAML::CommentScanner
           line += 1
           column = 1
           prev_was_ws = true
-          line_first_nonws_col = 0
+          key_indent_col = 0
+          consuming_seq_markers = true
           block_line_committed = false
         when ' ', '\t'
           column += 1
@@ -105,7 +125,7 @@ module KYAML::CommentScanner
         when '|', '>'
           if flow_depth == 0 && (column == 1 || prev_was_ws)
             pending_block_scalar = true
-            parent_indent = line_first_nonws_col - 1
+            parent_indent = key_indent_col - 1
           end
           column += 1
           prev_was_ws = false
@@ -170,7 +190,8 @@ module KYAML::CommentScanner
           line += 1
           column = 1
           prev_was_ws = true
-          line_first_nonws_col = 0
+          key_indent_col = 0
+          consuming_seq_markers = true
           block_line_committed = false
         else
           comment_buffer << char
