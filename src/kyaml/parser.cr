@@ -83,12 +83,12 @@ module KYAML
     return if starts.empty?
     # Bucket comments by doc index so they can be passed to `KYAML::Doc` constructor and paired with its associated `KYAML::Any` content
     doc_buckets = Array(Array(KYAML::Comment)).new(starts.size) { [] of KYAML::Comment }
-    comments.each do |c|
+    comments.each do |cmt|
       idx = 0
       starts.each_with_index do |start, i|
-        idx = i if c.line >= start
+        idx = i if cmt.line >= start
       end
-      doc_buckets[idx] << c
+      doc_buckets[idx] << cmt
     end
 
     i = 0

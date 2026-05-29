@@ -17,7 +17,8 @@ module KYAML::CommentScanner
     BlockScalar
   end
 
-  def scan(text : String) : Array(KYAML::Comment)
+  # Scans a YAML string and returns all comments within it.
+  def scan(text : String) : Array(KYAML::Comment) # ameba:disable Metrics/CyclomaticComplexity
     # Accumulates the final list of parsed comments to return
     result = [] of KYAML::Comment
     # Tracks the current lexer state (normal, quoted, comment, etc.)

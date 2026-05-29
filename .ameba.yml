@@ -10,6 +10,7 @@ Documentation/DocumentationAdmonition:
   Timezone: UTC
   Excluded:
     - src/kyaml/any.cr
+    - src/kyaml/emitter.cr
     - src/kyaml/parser.cr
     - spec/any_spec.cr
   Admonitions:
