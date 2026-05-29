@@ -85,7 +85,9 @@ describe KYAML::CommentScanner do
       comments.should be_empty
     end
 
-    pending "handles `\"` as an escaped double quote inside DoubleQuoted" do
+    it "handles `\"` as an escaped double quote inside DoubleQuoted" do
+      comments = KYAML::CommentScanner.scan(%(foo: "a \\" b # not a comment"))
+      comments.should be_empty
     end
 
     describe "SingleQuoted state" do
