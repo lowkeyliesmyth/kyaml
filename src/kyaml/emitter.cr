@@ -4,8 +4,7 @@ require "yaml"
 
 module KYAML
   # Renders KYAML values (`KYAML::Any::Type` union) as KYAML spec-compliant text.
-  # WIP: scalars
-  # TODO: collections, indentation, cuddling, comment placement
+  # TODO: cuddling, comment placement
   class Emitter
     def initialize(@io : IO)
       @indent = 0
@@ -62,6 +61,17 @@ module KYAML
         return
       end
 
+      if cuddleable?(array)
+        emit_cuddled_sequence(array)
+      else
+        emit_uncuddled_sequence(array)
+      end
+    end
+
+    # Emits *array* as a multiline sequence with each element on its own indented line to `Emitter.io`.
+    #
+    # Internal method called by `Emitter.emit_sequence`
+    private def emit_uncuddled_sequence(array : Array(KYAML::Any)) : Nil
       @io << "[\n"
       @indent += 1
       array.each do |elem|
@@ -72,6 +82,43 @@ module KYAML
       @indent -= 1
       write_indent
       @io << ']'
+    end
+
+    # Emits *array* as a multiline sequence with each element cuddled together on the same line to `Emitter.io`.
+    #
+    # Internal method called by `Emitter.emit_sequence`
+    private def emit_cuddled_sequence(array : Array(KYAML::Any)) : Nil
+      @io << '['
+      array.each_with_index do |elem, i|
+        @io << ", " if i > 0
+        emit(elem.raw)
+      end
+      @io << ']'
+    end
+
+    # Returns true if *array* elements should be cuddled together on the same line.
+    #
+    # Otherwise returns false.
+    private def cuddleable?(array : Array(KYAML::Any)) : Bool
+      return false if array.empty?
+
+      first = array.first.raw
+      case first
+      when Hash(String, KYAML::Any)
+        return false if first.empty?
+        array.all? do |elem|
+          raw = elem.raw
+          raw.is_a?(Hash(String, KYAML::Any)) && !raw.empty?
+        end
+      when Array(KYAML::Any)
+        return false if first.empty?
+        array.all? do |elem|
+          raw = elem.raw
+          raw.is_a?(Array(KYAML::Any)) && !raw.empty?
+        end
+      else
+        false
+      end
     end
 
     # Writes the current indentation level to `Emitter.io` as two-space indents.
