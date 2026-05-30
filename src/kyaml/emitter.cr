@@ -7,6 +7,7 @@ module KYAML
   # TODO: collections, indentation, cuddling, comment placement
   class Emitter
     def initialize(@io : IO)
+      @indent = 0
     end
 
     def emit(value : KYAML::Any::Type) : Nil
@@ -22,7 +23,7 @@ module KYAML
       in String
         emit_string(value)
       in Array(KYAML::Any)
-        raise KYAML::EmitError.new("sequence is still WIP")
+        emit_sequence(value)
       in Hash(String, KYAML::Any)
         raise KYAML::EmitError.new("mapping is still WIP")
       end
@@ -51,6 +52,30 @@ module KYAML
         end
       end
       @io << '"'
+    end
+
+    # Emits sequence with formatted indentation to `Emitter.io`
+    private def emit_sequence(array : Array(KYAML::Any)) : Nil
+      if array.empty?
+        @io << "[]"
+        return
+      end
+
+      @io << "[\n"
+      @indent += 1
+      array.each do |elem|
+        write_indent
+        emit(elem.raw)
+        @io << ",\n"
+      end
+      @indent -= 1
+      write_indent
+      @io << ']'
+    end
+
+    # Writes the current indentation level to `Emitter.io` as two-space indents.
+    private def write_indent : Nil
+      @indent.times { @io << "  " }
     end
   end
 
