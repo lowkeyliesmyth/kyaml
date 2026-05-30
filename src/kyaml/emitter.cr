@@ -1,5 +1,6 @@
 require "./any"
 require "./error"
+require "yaml"
 
 module KYAML
   # Renders KYAML values (`KYAML::Any::Type` union) as KYAML spec-compliant text.
@@ -25,7 +26,7 @@ module KYAML
       in Array(KYAML::Any)
         emit_sequence(value)
       in Hash(String, KYAML::Any)
-        raise KYAML::EmitError.new("mapping is still WIP")
+        emit_mapping(value)
       end
     end
 
@@ -76,6 +77,46 @@ module KYAML
     # Writes the current indentation level to `Emitter.io` as two-space indents.
     private def write_indent : Nil
       @indent.times { @io << "  " }
+    end
+
+    # Emits mapping with formatted indentation to `Emitter.io`
+    private def emit_mapping(hash : Hash(String, KYAML::Any)) : Nil
+      if hash.empty?
+        @io << "{}"
+        return
+      end
+
+      @io << "{\n"
+      @indent += 1
+      hash.each do |k, v|
+        write_indent
+        emit_key(k)
+        @io << ": "
+        emit(v.raw)
+        @io << ",\n"
+      end
+      @indent -= 1
+      write_indent
+      @io << '}'
+    end
+
+    # Emits *key* to `Emitter.io`, quoting only if necessary.
+    private def emit_key(key : String) : Nil
+      if safe_unquoted_key?(key)
+        @io << key
+      else
+        emit_string(key)
+      end
+    end
+
+    # Validates whether a given string key is safe or not to emit as a plain unquoted YAML key.
+    private def safe_unquoted_key?(key : String) : Bool
+      # first validate the key matches the allowed regex
+      return false unless key.matches?(/\A[A-Za-z_][A-Za-z0-9_\-.]*\z/)
+      probe = YAML::Nodes::Scalar.new(key)
+      probe.style = YAML::ScalarStyle::PLAIN
+      # then parse the key as a scalar and check it's a string
+      YAML::Schema::Core.parse_scalar(probe).is_a?(String)
     end
   end
 
