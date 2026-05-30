@@ -87,4 +87,93 @@ describe "KYAML::Emitter" do
       KYAML.emit(outer).should eq(kyaml)
     end
   end
+
+  describe "mapping rendering" do
+    it "renders an empty mapping inline" do
+      KYAML.emit({} of String => KYAML::Any).should eq("{}")
+    end
+
+    it "renders a single pair with a safe unquoted key" do
+      kyaml = <<-KYAML
+      {
+        foo: "bar",
+      }
+      KYAML
+      h = {"foo" => KYAML::Any.new("bar")}
+      KYAML.emit(h).should eq(kyaml)
+    end
+
+    it "preserves insertion order across multiple pairs" do
+      kyaml = <<-KYAML
+      {
+        a: 1,
+        b: 2,
+        c: 3,
+      }
+      KYAML
+      h = {"a" => KYAML::Any.new(1), "b" => KYAML::Any.new(2), "c" => KYAML::Any.new(3)}
+      KYAML.emit(h).should eq(kyaml)
+    end
+
+    it "quotes keys that resolve as known type-ambiguous words (bool/null/number)" do
+      kyaml = <<-KYAML
+      {
+        "true": 1,
+        "null": 2,
+        "no": 3,
+      }
+      KYAML
+      h = {"true" => KYAML::Any.new(1), "null" => KYAML::Any.new(2), "no" => KYAML::Any.new(3)}
+      KYAML.emit(h).should eq(kyaml)
+    end
+
+    it "quotes keys with whitespace, colons, or other unsafe chars" do
+      kyaml = <<-KYAML
+      {
+        "foo bar": 1,
+        "a:b": 2,
+      }
+      KYAML
+      h = {"foo bar" => KYAML::Any.new(1), "a:b" => KYAML::Any.new(2)}
+      KYAML.emit(h).should eq(kyaml)
+    end
+
+    it "quotes Norway-bug keys regardless of case" do
+      kyaml = <<-KYAML
+      {
+        "NO": 1,
+        "On": 2,
+        "no": 3,
+      }
+      KYAML
+      h = {"NO" => KYAML::Any.new(1), "On" => KYAML::Any.new(2), "no" => KYAML::Any.new(3)}
+      KYAML.emit(h).should eq(kyaml)
+    end
+
+    it "indents nested mappings with two spaces per level" do
+      kyaml = <<-KYAML
+      {
+        metadata: {
+          name: "svc",
+        },
+      }
+      KYAML
+
+      inner = {"name" => KYAML::Any.new("svc")}
+      outer = {"metadata" => KYAML::Any.new(inner)}
+      KYAML.emit(outer).should eq(kyaml)
+    end
+
+    it "renders a squence of mappings" do
+      kyaml = <<-KYAML
+      [
+        {
+          port: 80,
+        },
+      ]
+      KYAML
+      seq = [KYAML::Any.new({"port" => KYAML::Any.new(80)})]
+      KYAML.emit(seq).should eq(kyaml)
+    end
+  end
 end
