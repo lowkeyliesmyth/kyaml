@@ -61,9 +61,17 @@ module KYAML
   # Follows the same lenient/strict modes as `parse`.
   def self.parse_doc(input : String | IO, *, strict : Bool = false) : KYAML::Doc
     text = input.is_a?(IO) ? input.gets_to_end : input
-    root = parse(text, strict: strict)
-
-    KYAML::Doc.new(root, KYAML::CommentScanner.scan(text))
+    yaml_doc = YAML::Nodes.parse(text)
+    node = yaml_doc.nodes.first? || empty_scalar
+    Validator.validate(node, strict)
+    root = KYAML::Any.new(YAML::ParseContext.new, node)
+    KYAML::Doc.new(root, KYAML::CommentScanner.scan(text), yaml_doc)
+  rescue ex : YAML::ParseException
+    raise KYAML::ParseError.new(
+      ex.message || "YAML parse error",
+      ex.line_number,
+      ex.column_number,
+    )
   end
 
   # Parses a multi-doc K/YAML stream, block variant.  Yields each doc as a `KYAML::Doc`.
@@ -75,26 +83,25 @@ module KYAML
   def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Nil
     text = input.is_a?(IO) ? input.gets_to_end : input
     comments = KYAML::CommentScanner.scan(text)
+    yaml_docs = YAML::Nodes.parse_all(text)
 
-    # impl note: `start_line` is 0-based (libyaml) while `Comment#line` is 1-based.
-    # `c.line >= start` below works despite the mismatch because `---` always occupies its own line and so a comment (1-based line) is always after the start of the doc start (0-based line)
-    starts = YAML::Nodes.parse_all(text).map(&.start_line)
-
-    return if starts.empty?
+    starts = yaml_docs.map(&.start_line)
     # Bucket comments by doc index so they can be passed to `KYAML::Doc` constructor and paired with its associated `KYAML::Any` content
-    doc_buckets = Array(Array(KYAML::Comment)).new(starts.size) { [] of KYAML::Comment }
+    doc_buckets = Array(Array(KYAML::Comment)).new(yaml_docs.size) { [] of KYAML::Comment }
     comments.each do |cmt|
       idx = 0
       starts.each_with_index do |start, i|
         idx = i if cmt.line >= start
       end
-      doc_buckets[idx] << cmt
+      doc_buckets[idx] << cmt unless doc_buckets.empty?
     end
 
-    i = 0
-    parse_all(text, strict: strict) do |root|
-      yield KYAML::Doc.new(root, doc_buckets[i])
-      i += 1
+    # stop delegating to `parse_all` since we need the per-doc YAML::Nodes::Document for comment classification
+    yaml_docs.each_with_index do |yaml_doc, i|
+      node = yaml_doc.nodes.first? || empty_scalar
+      Validator.validate(node, strict)
+      root = KYAML::Any.new(YAML::ParseContext.new, node)
+      yield KYAML::Doc.new(root, doc_buckets[i], yaml_doc)
     end
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(

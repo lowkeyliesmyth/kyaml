@@ -281,10 +281,15 @@ describe "KYAML" do
       doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
       doc.comments.map(&.text).should eq([" header"])
     end
+
+    it "retains original YAML::Nodes::Doc on the returned Doc" do
+      doc = KYAML.parse_doc("foo: 1\n")
+      doc.yaml_doc.should be_a(YAML::Nodes::Document)
+    end
   end
 
   describe "#parse_all_docs" do
-    it "partitionts comments per doc by --- position" do
+    it "partitions comments per doc by --- position" do
       yaml = "# header for doc 0\n---\nfoo: 1 # trailing 0\n# between\n---\n# leading doc 1\nbar: 2\n"
 
       docs = KYAML.parse_all_docs(yaml)
@@ -314,7 +319,7 @@ describe "KYAML" do
       docs[1].root["bar"].as_i.should eq(2)
     end
 
-    it "returns an empty arry for empty input" do
+    it "returns an empty array for empty input" do
       KYAML.parse_all_docs("").should eq([] of KYAML::Doc)
     end
 
@@ -332,6 +337,20 @@ describe "KYAML" do
       expect_raises(KYAML::BlockStyleError) do
         KYAML.parse_all_docs("---\na: 1\n---\nb: 2\n", strict: true)
       end
+    end
+
+    it "retains a YAML::Nodes::Document on each yielded doc in order" do
+      docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
+      docs.size.should eq(2)
+      docs.each do |doc|
+        doc.yaml_doc.should be_a(YAML::Nodes::Document)
+      end
+      docs[0].yaml_doc.should_not be(docs[1].yaml_doc)
+    end
+
+    it "leaves yaml_doc nil on hand-built Docs" do
+      doc = KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment)
+      doc.yaml_doc.should be_nil
     end
   end
 end

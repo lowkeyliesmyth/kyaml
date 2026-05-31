@@ -1,4 +1,5 @@
 require "./any"
+require "yaml"
 
 # A comment captured from a parsed K/YAML source doc.
 #
@@ -26,8 +27,12 @@ end
 struct KYAML::Doc
   getter root : KYAML::Any
   getter comments : Array(KYAML::Comment)
+  # Original parsed YAML node tree, retained so emit-side comment classification can walk it in parallel with `root` and recover source positions.
+  #
+  # `nil` for hand-constructed docs that don't have a corresponding parsed node tree.
+  getter yaml_doc : YAML::Nodes::Document?
 
-  def initialize(@root : KYAML::Any, @comments : Array(KYAML::Comment))
+  def initialize(@root : KYAML::Any, @comments : Array(KYAML::Comment), @yaml_doc : YAML::Nodes::Document? = nil)
   end
 
   # Emits this doc as complete KYAML to *io*.
