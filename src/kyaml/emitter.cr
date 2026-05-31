@@ -1,4 +1,5 @@
 require "./any"
+require "./comment"
 require "./error"
 require "yaml"
 
@@ -177,5 +178,29 @@ module KYAML
   # Emits *value* as KYAML and returns it as a `String`
   def self.emit(value : KYAML::Any::Type) : String
     String.build { |io| emit(value, io) }
+  end
+
+  # Emits *doc* as a complete KYAML document to *io*.
+  #
+  # TODO: comment rendering
+  def self.emit_doc(doc : KYAML::Doc, io : IO) : Nil
+    io << "---\n"
+    emit(doc.root.raw, io)
+    io << '\n'
+  end
+
+  # Emits *doc* as a complete KYAML document and returns it as a `String`.
+  def self.emit_doc(doc : KYAML::Doc) : String
+    String.build { |io| emit_doc(doc, io) }
+  end
+
+  # Emits each `KYAML::Doc` in *docs* as a complete KYAML document to *io*.
+  def self.emit_all_docs(docs : Enumerable(KYAML::Doc), io : IO) : Nil
+    docs.each { |doc| emit_doc(doc, io) }
+  end
+
+  # Emits all `KYAML::Doc` in *docs* as a complete KYAML document and returns it as a `String`.
+  def self.emit_all_docs(docs : Enumerable(KYAML::Doc)) : String
+    String.build { |io| emit_all_docs(docs, io) }
   end
 end
