@@ -273,4 +273,34 @@ describe "KYAML::Emitter" do
       KYAML.emit(hash).should eq(kyaml)
     end
   end
+
+  describe "document rendering" do
+    it "wraps a scalar in --- and a trailing newline" do
+      doc = KYAML::Doc.new(KYAML::Any.new(42), [] of KYAML::Comment)
+      KYAML.emit_doc(doc).should eq("---\n42\n")
+    end
+
+    it "wraps a mapping in --- and a trailing newline" do
+      doc = KYAML::Doc.new(KYAML::Any.new({"foo" => KYAML::Any.new("bar")}), [] of KYAML::Comment)
+      KYAML.emit_doc(doc).should eq("---\n{\n  foo: \"bar\",\n}\n")
+    end
+
+    it "wraps an empty mapping" do
+      doc = KYAML::Doc.new(KYAML::Any.new({} of String => KYAML::Any), [] of KYAML::Comment)
+      KYAML.emit_doc(doc).should eq("---\n{}\n")
+    end
+
+    it "is reachable via KYAML::Doc#.to_yaml" do
+      doc = KYAML::Doc.new(KYAML::Any.new("waddup bro"), [] of KYAML::Comment)
+      doc.to_yaml.should eq("---\n\"waddup bro\"\n")
+    end
+
+    it "concatenates multiple docs via #emit_all_docs" do
+      docs = [
+        KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment),
+        KYAML::Doc.new(KYAML::Any.new(2), [] of KYAML::Comment),
+      ]
+      KYAML.emit_all_docs(docs).should eq("---\n1\n---\n2\n")
+    end
+  end
 end
