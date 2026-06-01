@@ -27,7 +27,6 @@ describe "KYAML::Emitter" do
     it "escapes quotes, backslashes, and other special control whitespace chars" do
       KYAML.emit(%(a"b)).should eq(%("a\\"b"))
       KYAML.emit("a\\b").should eq(%("a\\\\b"))
-      KYAML.emit("a\nb").should eq(%("a\\nb"))
       KYAML.emit("a\tb").should eq(%("a\\tb"))
     end
 
@@ -68,6 +67,55 @@ describe "KYAML::Emitter" do
     end
   end
 
+  describe "multi-line string folding" do
+    it "folds a trailing-newline multiline string and round-trips it" do
+      result = KYAML.emit("Line one\nLine two\n")
+      expected = <<-'EXP'
+      "\
+        Line one\n\
+        Line two\n\
+        "
+      EXP
+      result.should eq(expected)
+      YAML.parse(result).as_s.should eq("Line one\nLine two\n")
+    end
+
+    it "folds a multiline string with no trailing newline" do
+      result = KYAML.emit("a\nb")
+      expected = <<-'EXP'
+      "\
+        a\n\
+        b"
+      EXP
+      result.should eq(expected)
+      YAML.parse(result).as_s.should eq("a\nb")
+    end
+
+    it "indents continuation lines one level past the mapping key" do
+      result = KYAML.emit({"description" => KYAML::Any.new("Line one\nLine two\n")})
+      expected = <<-'EXP'
+      {
+        description: "\
+          Line one\n\
+          Line two\n\
+          ",
+      }
+      EXP
+      result.should eq(expected)
+      YAML.parse(result)["description"].as_s.should eq("Line one\nLine two\n")
+    end
+
+    it "preserves meaningful leading whitespace with a \\u0020 anchor" do
+      result = KYAML.emit("a\n  indented")
+      expected = <<-'EXP'
+      "\
+        a\n\
+        \u0020 indented"
+      EXP
+      result.should eq(expected)
+      YAML.parse(result).as_s.should eq("a\n  indented")
+    end
+  end
   describe "sequence rendering" do
     it "renders an empty sequence inline" do
       KYAML.emit([] of KYAML::Any).should eq("[]")

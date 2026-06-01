@@ -41,25 +41,39 @@ module KYAML
 
     # Emits strings to `Emitter.io`, escaping special characters as needed.
     #
-    # Printable ASCII is emitted literally. Control characters and non-ASCII Unicode characters are escaped to a `\uXXXX` (BMP) or `\UXXXXXXXX` (full Unicode _astral??_) sequence.
+    # Single-line strings are emitted inline.
+    #
+    # Multiline strings are rendered with YAML flow-folding.
     private def emit_string(value : String) : Nil
-      @io << '"'
-      value.each_char do |char|
-        case char
-        when '"'             then @io << "\\\""
-        when '\\'            then @io << "\\\\"
-        when '\n'            then @io << "\\n"
-        when '\t'            then @io << "\\t"
-        when '\r'            then @io << "\\r"
-        when .ascii_control? then emit_unicode_escape(char)
-        when .ascii?         then @io << char
-        else                      emit_unicode_escape(char)
+      if value.includes?('\n')
+        emit_folded_string(value)
+      else
+        @io << '"'
+        value.each_char do |char|
+          emit_escaped_char(char)
         end
+        @io << '"'
       end
-      @io << '"'
     end
 
-    # Emits *char*s as a fixed-width Unicode escape: `\uXXXX` (Basic Multilingual Plane) or `\UXXXXXXXX` (full Unicode _astral plane??_).
+    # Emits a single character with proper KYAML escaping applied.
+    #
+    # Common whitespace and structural characters are named and escaped here.
+    # Printable ASCII is emitted literally. Control characters and non-ASCII Unicode characters are escaped to a `\uXXXX` (BMP) or `\UXXXXXXXX` (full Unicode _astral plane?!_) sequence.
+    private def emit_escaped_char(char : Char) : Nil
+      case char
+      when '"'             then @io << "\\\""
+      when '\\'            then @io << "\\\\"
+      when '\n'            then @io << "\\n"
+      when '\t'            then @io << "\\t"
+      when '\r'            then @io << "\\r"
+      when .ascii_control? then emit_unicode_escape(char)
+      when .ascii?         then @io << char
+      else                      emit_unicode_escape(char)
+      end
+    end
+
+    # Emits *char*s as a fixed-width Unicode escape: `\uXXXX` (Basic Multilingual Plane) or `\UXXXXXXXX` (full Unicode _astral plane?!_).
     #
     # Hex is upcased and zero-padded to the full 4/8-digit width.
     private def emit_unicode_escape(char : Char) : Nil
@@ -68,6 +82,35 @@ module KYAML
         @io << "\\u" << cp.to_s(16).rjust(4, '0').upcase
       else
         @io << "\\U" << cp.to_s(16).rjust(8, '0').upcase
+      end
+    end
+
+    # Emits *value* as a YAML flowfolded and doublequoted scalar to `Emitter.io`.
+    #
+    # *value* is wrapped at newlines with a `\` escaped linebreak and a one-level cosmetic indent applied for readability. Defers to `emit_folded_segment` to inject meaningful leading space `\u0020` anchor.
+    private def emit_folded_string(value : String) : Nil
+      @io << "\"\\\n"
+      @indent += 1
+      segments = value.split("\n")
+      segments.each_with_index do |segment, i|
+        write_indent
+        emit_folded_segment(segment)
+        @io << "\\n\\\n" if i < segments.size - 1
+      end
+      @indent -= 1
+      @io << '"'
+    end
+
+    # Emits a single newline-free *segment* of a folded string.
+    #
+    # A leading space `\u0020` anchor is injected to preserve indentation in the output.
+    private def emit_folded_segment(segment : String) : Nil
+      return if segment.empty?
+      if segment.starts_with?(' ')
+        @io << "\\u0020"
+        segment[1..].each_char { |char| emit_escaped_char(char) }
+      else
+        segment.each_char { |char| emit_escaped_char(char) }
       end
     end
 
