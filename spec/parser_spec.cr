@@ -2,6 +2,12 @@ require "./spec_helper"
 
 describe "KYAML" do
   describe "#parse" do
+    it "ignores comments and exposes no comment data on plain parse" do
+      any = KYAML.parse("# comment\nfoo: bar\n")
+      any.should be_a(KYAML::Any)
+      any["foo"].as_s.should eq("bar")
+    end
+
     it "parses a flow-style mapping" do
       yaml = %({foo: "bar", baz: 42})
       any = KYAML.parse(yaml)
@@ -229,6 +235,122 @@ describe "KYAML" do
       it "returns an empty array for empty input" do
         KYAML.parse_all("").should eq([] of KYAML::Any)
       end
+    end
+  end
+
+  describe "#parse_doc" do
+    it "returns a Doc with the parsed root and empty comments list when no comments present" do
+      doc = KYAML.parse_doc(%({foo: "bar"}))
+      doc.root["foo"].as_s.should eq("bar")
+      doc.comments.should be_empty
+    end
+
+    it "honors `strict:` mode" do
+      expect_raises(KYAML::BlockStyleError) do
+        KYAML.parse_doc("foo: bar\nbaz: qux\n", strict: true)
+      end
+    end
+
+    it "propagates KAYML::ParseError on malformed input" do
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_doc("{unclosed: ")
+      end
+    end
+
+    it "capturs a leading comment above a mapping pair" do
+      doc = KYAML.parse_doc("# title\nfoo: bar\n")
+      doc.root["foo"].as_s.should eq("bar")
+      doc.comments.map(&.text).should eq([" title"])
+      doc.comments[0].line.should eq(1)
+      doc.comments[0].column.should eq(1)
+    end
+
+    it "captures trailing inline comment on a scalar" do
+      doc = KYAML.parse_doc("foo: bar # inline\n")
+      doc.comments.size.should eq(1)
+      doc.comments[0].text.should eq(" inline")
+      doc.comments[0].line.should eq(1)
+    end
+
+    it "captures a standalone comment between flow sequence items" do
+      doc = KYAML.parse_doc("[\n 1,\n # mid\n 2,\n]\n")
+      doc.comments.map(&.text).should eq([" mid"])
+    end
+
+    it "captures a doc-header comment preceding ---" do
+      doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
+      doc.comments.map(&.text).should eq([" header"])
+    end
+
+    it "retains original YAML::Nodes::Doc on the returned Doc" do
+      doc = KYAML.parse_doc("foo: 1\n")
+      doc.yaml_doc.should be_a(YAML::Nodes::Document)
+    end
+  end
+
+  describe "#parse_all_docs" do
+    it "partitions comments per doc by --- position" do
+      yaml = "# header for doc 0\n---\nfoo: 1 # trailing 0\n# between\n---\n# leading doc 1\nbar: 2\n"
+
+      docs = KYAML.parse_all_docs(yaml)
+      docs.size.should eq(2)
+      docs[0].comments.map(&.text).should eq([" header for doc 0", " trailing 0", " between"])
+      docs[1].comments.map(&.text).should eq([" leading doc 1"])
+    end
+
+    it "returns one Doc per input doc in a multi-doc stream" do
+      docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
+      docs.size.should eq(2)
+      docs[0].root["foo"].as_i.should eq(1)
+      docs[1].root["bar"].as_i.should eq(2)
+      docs.each do |doc|
+        doc.comments.should be_empty
+      end
+    end
+
+    it "yields one Doc per input doc in a multi-doc stream (block form)" do
+      yaml = "---\nfoo: 1\n---\nbar: 2\n"
+      docs = [] of KYAML::Doc
+      KYAML.parse_all_docs(yaml) do |doc|
+        docs << doc
+      end
+      docs.size.should eq(2)
+      docs[0].root["foo"].as_i.should eq(1)
+      docs[1].root["bar"].as_i.should eq(2)
+    end
+
+    it "returns an empty array for empty input" do
+      KYAML.parse_all_docs("").should eq([] of KYAML::Doc)
+    end
+
+    it "returns an empty array on comments-only input" do
+      KYAML.parse_all_docs("# only a comment\n").should be_empty
+    end
+
+    it "yields nothing on input with only comments but no yaml docs" do
+      yielded = 0
+      KYAML.parse_all_docs("\n# only a comment\n# another comment") { |_| yielded += 1 }
+      yielded.should eq(0)
+    end
+
+    it "honors `strict:` mode across multiple docs" do
+      expect_raises(KYAML::BlockStyleError) do
+        KYAML.parse_all_docs("---\na: 1\n---\nb: 2\n", strict: true)
+      end
+    end
+
+    it "retains a YAML::Nodes::Document on each yielded doc in order" do
+      docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
+      docs.size.should eq(2)
+      docs.each do |doc|
+        doc.yaml_doc.should be_a(YAML::Nodes::Document)
+      end
+      docs[0].yaml_doc.should_not be(docs[1].yaml_doc)
+    end
+
+    it "leaves yaml_doc nil on hand-built Docs" do
+      doc = KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment)
+      doc.yaml_doc.should be_nil
     end
   end
 end

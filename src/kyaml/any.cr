@@ -373,13 +373,11 @@ struct KYAML::Any
   # See `Object#hash(hasher)`
   def_hash raw
 
-  # TODO: `.emit` method TBD
   # emits this value as KYAML to the given IO
   def to_yaml(io : IO) : Nil
     KYAML.emit(raw, io)
   end
 
-  # TODO: `.emit` method TBD
   # emits this value as KYAML and returns it as a string
   def to_yaml : String
     KYAML.emit(raw)
