@@ -44,6 +44,28 @@ describe "KYAML::Emitter" do
     it "is reachable through KYAML::Any#to_yaml" do
       KYAML::Any.new("x").to_yaml.should eq(%("x"))
     end
+
+    it "escapes control characters as \\uXXXX" do
+      KYAML.emit("\u0000").should eq(%q("\u0000"))
+      KYAML.emit("\u0007").should eq(%q("\u0007"))
+      KYAML.emit("\u007F").should eq(%q("\u007F"))
+    end
+
+    it "escapes C1 controls as \\uXXXX" do
+      KYAML.emit("\u0085").should eq(%q("\u0085"))
+    end
+
+    it "escapes non-ASCII Unicode BMP characters as \\uXXXX" do
+      KYAML.emit("中").should eq(%q("\u4E2D"))
+    end
+
+    it "escapes astral Unicode characters as \\UXXXXXXXX" do
+      KYAML.emit("😀").should eq(%q("\U0001F600"))
+    end
+
+    it "leaves printable ASCII characters untouched" do
+      KYAML.emit("aZ0 ~!").should eq(%q("aZ0 ~!"))
+    end
   end
 
   describe "sequence rendering" do

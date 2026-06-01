@@ -6,7 +6,6 @@ require "yaml"
 
 module KYAML
   # Renders KYAML values (`KYAML::Any::Type` union) as KYAML spec-compliant text.
-  # TODO: cuddling, comment placement
   class Emitter
     def initialize(@io : IO, @comments : ClassifiedComments = ClassifiedComments.new)
       @indent = 0
@@ -41,19 +40,35 @@ module KYAML
     end
 
     # Emits strings to `Emitter.io`, escaping special characters as needed.
+    #
+    # Printable ASCII is emitted literally. Control characters and non-ASCII Unicode characters are escaped to a `\uXXXX` (BMP) or `\UXXXXXXXX` (full Unicode _astral??_) sequence.
     private def emit_string(value : String) : Nil
       @io << '"'
       value.each_char do |char|
         case char
-        when '"'  then @io << "\\\""
-        when '\\' then @io << "\\\\"
-        when '\n' then @io << "\\n"
-        when '\t' then @io << "\\t"
-        when '\r' then @io << "\\r"
-        else           @io << char
+        when '"'             then @io << "\\\""
+        when '\\'            then @io << "\\\\"
+        when '\n'            then @io << "\\n"
+        when '\t'            then @io << "\\t"
+        when '\r'            then @io << "\\r"
+        when .ascii_control? then emit_unicode_escape(char)
+        when .ascii?         then @io << char
+        else                      emit_unicode_escape(char)
         end
       end
       @io << '"'
+    end
+
+    # Emits *char*s as a fixed-width Unicode escape: `\uXXXX` (Basic Multilingual Plane) or `\UXXXXXXXX` (full Unicode _astral plane??_).
+    #
+    # Hex is upcased and zero-padded to the full 4/8-digit width.
+    private def emit_unicode_escape(char : Char) : Nil
+      cp = char.ord
+      if cp <= 0xFFFF
+        @io << "\\u" << cp.to_s(16).rjust(4, '0').upcase
+      else
+        @io << "\\U" << cp.to_s(16).rjust(8, '0').upcase
+      end
     end
 
     # Emits sequence with formatted indentation to `Emitter.io`
