@@ -1,17 +1,18 @@
 require "./any"
 require "./comment"
 require "./error"
+require "./classifier"
 require "yaml"
 
 module KYAML
   # Renders KYAML values (`KYAML::Any::Type` union) as KYAML spec-compliant text.
   # TODO: cuddling, comment placement
   class Emitter
-    def initialize(@io : IO)
+    def initialize(@io : IO, @comments : ClassifiedComments = ClassifiedComments.new)
       @indent = 0
     end
 
-    def emit(value : KYAML::Any::Type) : Nil
+    def emit(value : KYAML::Any::Type, source : YAML::Nodes::Node? = nil) : Nil
       case value
       in Nil
         @io << "null"
@@ -24,9 +25,9 @@ module KYAML
       in String
         emit_string(value)
       in Array(KYAML::Any)
-        emit_sequence(value)
+        emit_sequence(value, source)
       in Hash(String, KYAML::Any)
-        emit_mapping(value)
+        emit_mapping(value, source)
       end
     end
 
@@ -56,30 +57,36 @@ module KYAML
     end
 
     # Emits sequence with formatted indentation to `Emitter.io`
-    private def emit_sequence(array : Array(KYAML::Any)) : Nil
+    private def emit_sequence(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
       if array.empty?
         @io << "[]"
         return
       end
 
-      if cuddleable?(array)
-        emit_cuddled_sequence(array)
+      if cuddleable?(array, source)
+        emit_cuddled_sequence(array, source)
       else
-        emit_uncuddled_sequence(array)
+        emit_uncuddled_sequence(array, source)
       end
     end
 
     # Emits *array* as a multiline sequence with each element on its own indented line to `Emitter.io`.
     #
     # Internal method called by `Emitter.emit_sequence`
-    private def emit_uncuddled_sequence(array : Array(KYAML::Any)) : Nil
+    private def emit_uncuddled_sequence(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
+      seq = source.as?(YAML::Nodes::Sequence)
       @io << "[\n"
       @indent += 1
-      array.each do |elem|
+      array.each_with_index do |elem, i|
+        elem_source = seq.try &.nodes[i]?
+        emit_leading(elem_source)
         write_indent
-        emit(elem.raw)
-        @io << ",\n"
+        emit(elem.raw, elem_source)
+        @io << ','
+        emit_trailing(elem_source)
+        @io << "\n"
       end
+      emit_tail(source)
       @indent -= 1
       write_indent
       @io << ']'
@@ -88,11 +95,12 @@ module KYAML
     # Emits *array* as a multiline sequence with each element cuddled together on the same line to `Emitter.io`.
     #
     # Internal method called by `Emitter.emit_sequence`
-    private def emit_cuddled_sequence(array : Array(KYAML::Any)) : Nil
+    private def emit_cuddled_sequence(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
+      seq = source.as?(YAML::Nodes::Sequence)
       @io << '['
       array.each_with_index do |elem, i|
         @io << ", " if i > 0
-        emit(elem.raw)
+        emit(elem.raw, seq.try &.nodes[i]?)
       end
       @io << ']'
     end
@@ -100,8 +108,9 @@ module KYAML
     # Returns true if *array* elements should be cuddled together on the same line.
     #
     # Otherwise returns false.
-    private def cuddleable?(array : Array(KYAML::Any)) : Bool
-      return false if array.empty?
+    private def cuddleable?(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Bool
+      # A sequence whose source subtree has any comment cannot be collapsed
+      return false if source && @comments.commented.includes?(source)
 
       first = array.first.raw
       case first
@@ -122,27 +131,67 @@ module KYAML
       end
     end
 
+    # Emits any leading ocmment lines attached to *source*, each on its own indented line above the node.
+    #
+    # No-op when *source* is nil or has no leading comments.
+    private def emit_leading(source : YAML::Nodes::Node?) : Nil
+      return if source.nil?
+      @comments.leading[source]?.try &.each do |cmt|
+        write_indent
+        @io << '#' << cmt.text << "\n"
+      end
+    end
+
+    # Emits any trailing comment attached to *source* on the current line.
+    #
+    # No-op when *source* is nil or has no trailing comments.
+    private def emit_trailing(source : YAML::Nodes::Node?) : Nil
+      return if source.nil?
+      cmt = @comments.trailing[source]?
+      return if cmt.nil?
+      @io << " #" << cmt.text
+    end
+
+    # Emits any tail comment attached to a container *source*, each on its own indented line before the container's closing bracket.
+    #
+    # No-op when *source* is nil or has no tail comments.
+    private def emit_tail(source : YAML::Nodes::Node?) : Nil
+      return if source.nil?
+      @comments.tail[source]?.try &.each do |cmt|
+        write_indent
+        @io << '#' << cmt.text << "\n"
+      end
+    end
+
     # Writes the current indentation level to `Emitter.io` as two-space indents.
     private def write_indent : Nil
       @indent.times { @io << "  " }
     end
 
     # Emits mapping with formatted indentation to `Emitter.io`
-    private def emit_mapping(hash : Hash(String, KYAML::Any)) : Nil
+    private def emit_mapping(hash : Hash(String, KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
       if hash.empty?
         @io << "{}"
         return
       end
 
+      mapping = source.as?(YAML::Nodes::Mapping)
+
       @io << "{\n"
       @indent += 1
-      hash.each do |k, v|
+      hash.each_with_index do |(k, v), i|
+        key_source = mapping.try &.nodes[i * 2]?
+        val_source = mapping.try &.nodes[i * 2 + 1]?
+        emit_leading(key_source)
         write_indent
         emit_key(k)
         @io << ": "
-        emit(v.raw)
-        @io << ",\n"
+        emit(v.raw, val_source)
+        @io << ','
+        emit_trailing(val_source)
+        @io << '\n'
       end
+      emit_tail(source)
       @indent -= 1
       write_indent
       @io << '}'
@@ -180,12 +229,15 @@ module KYAML
     String.build { |io| emit(value, io) }
   end
 
-  # Emits *doc* as a complete KYAML document to *io*.
-  #
-  # TODO: comment rendering
+  # Emits *doc* as a complete KYAML document to *io*, including any preserved comments.
   def self.emit_doc(doc : KYAML::Doc, io : IO) : Nil
+    comments = Classifier.classify(doc.yaml_doc, doc.comments)
+    comments.header.each do |cmt|
+      io << '#' << cmt.text << '\n'
+    end
     io << "---\n"
-    emit(doc.root.raw, io)
+    root_source = doc.yaml_doc.try &.nodes.first?
+    Emitter.new(io, comments).emit(doc.root.raw, root_source)
     io << '\n'
   end
 

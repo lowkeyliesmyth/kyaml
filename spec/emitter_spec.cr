@@ -303,4 +303,49 @@ describe "KYAML::Emitter" do
       KYAML.emit_all_docs(docs).should eq("---\n1\n---\n2\n")
     end
   end
+
+  describe "comment emission" do
+    it "renders a header comment above the `---` separator" do
+      doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
+      KYAML.emit_doc(doc).should eq("# header\n---\n{\n  foo: 1,\n}\n")
+    end
+
+    it "renders a leading comment above its mapping pair" do
+      doc = KYAML.parse_doc("---\n# leading\nfoo: 1\n")
+      KYAML.emit_doc(doc).should eq("---\n{\n  # leading\n  foo: 1,\n}\n")
+    end
+
+    it "renders a trailing comment after the value's comma" do
+      doc = KYAML.parse_doc("---\nfoo: 1 # trailing\n")
+      KYAML.emit_doc(doc).should eq("---\n{\n  foo: 1, # trailing\n}\n")
+    end
+
+    it "renders a tail comment before the closing brace" do
+      doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n  # tail\n")
+      KYAML.emit_doc(doc).should eq(
+        "---\n{\n  outer: {\n    foo: 1,\n    bar: 2,\n    # tail\n  },\n}\n")
+    end
+
+    it "renders a column-shallow comment above the next sibling, not inside the container" do
+      doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n# x\nbaz: 3\n")
+      KYAML.emit_doc(doc).should eq(
+        "---\n{\n  outer: {\n    foo: 1,\n    bar: 2,\n  },\n  # x\n  baz: 3,\n}\n"
+      )
+    end
+
+    it "preserves line breaks across stacked leading comments" do
+      doc = KYAML.parse_doc("---\n# line one\n# line two\nfoo: 1\n")
+      KYAML.emit_doc(doc).should eq(
+        "---\n{\n  # line one\n  # line two\n  foo: 1,\n}\n"
+      )
+    end
+
+    it "disables cuddling when a sequence element carries a comment" do
+      doc = KYAML.parse_doc("items:\n- foo: 1 # note\n- foo: 2\n")
+      KYAML.emit_doc(doc).should eq(
+        "---\n{\n  items: [\n    {\n      foo: 1, # note\n    },\n" \
+        "    {\n      foo: 2,\n    },\n  ],\n}\n"
+      )
+    end
+  end
 end
