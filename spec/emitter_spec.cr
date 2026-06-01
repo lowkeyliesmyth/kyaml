@@ -348,4 +348,25 @@ describe "KYAML::Emitter" do
       )
     end
   end
+
+  describe "anchor, alias, and tag stripping" do
+    it "expands aliases to their anchored values, stripping anchor and alias markers (&/*)" do
+      out = KYAML.emit(KYAML.parse("base: &a {x: 1}\nuse: *a\n").raw)
+      out.should_not contain('&')
+      out.should_not contain('*')
+      out.should eq("{\n  base: {\n    x: 1,\n  },\n  use: {\n    x: 1,\n  },\n}")
+    end
+
+    it "strips tags, emitting the resolved value with no tag markers" do
+      out = KYAML.emit(KYAML.parse("foo: !!str 7\n").raw)
+      out.should_not contain('!')
+      out.should eq(%({\n  foo: "7",\n}))
+    end
+
+    it "strips unknown tags, emitting just the bare scalar" do
+      out = KYAML.emit(KYAML.parse("foo: !mytag bar\n").raw)
+      out.should_not contain('!')
+      out.should eq(%({\n  foo: "bar",\n}))
+    end
+  end
 end
