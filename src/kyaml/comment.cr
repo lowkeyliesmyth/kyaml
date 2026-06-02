@@ -36,12 +36,12 @@ struct KYAML::Doc
   end
 
   # Emits this doc as complete KYAML to *io*.
-  def to_yaml(io : IO) : Nil
+  def to_kyaml(io : IO) : Nil
     KYAML.emit_doc(self, io)
   end
 
   # Emits this doc as complete KYAML and returns it as a `String`.
-  def to_yaml : String
+  def to_kyaml : String
     KYAML.emit_doc(self)
   end
 end

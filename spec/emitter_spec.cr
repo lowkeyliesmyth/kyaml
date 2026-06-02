@@ -40,8 +40,8 @@ describe "KYAML::Emitter" do
       end
     end
 
-    it "is reachable through KYAML::Any#to_yaml" do
-      KYAML::Any.new("x").to_yaml.should eq(%("x"))
+    it "is reachable through KYAML::Any#to_kyaml" do
+      KYAML::Any.new("x").to_kyaml.should eq(%("x"))
     end
 
     it "escapes control characters as \\uXXXX" do
@@ -360,9 +360,9 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq("---\n{}\n")
     end
 
-    it "is reachable via KYAML::Doc#.to_yaml" do
+    it "is reachable via KYAML::Doc#.to_kyaml" do
       doc = KYAML::Doc.new(KYAML::Any.new("waddup bro"), [] of KYAML::Comment)
-      doc.to_yaml.should eq("---\n\"waddup bro\"\n")
+      doc.to_kyaml.should eq("---\n\"waddup bro\"\n")
     end
 
     it "concatenates multiple docs via #emit_all_docs" do
