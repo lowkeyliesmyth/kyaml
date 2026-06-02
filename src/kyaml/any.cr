@@ -374,12 +374,12 @@ struct KYAML::Any
   def_hash raw
 
   # emits this value as KYAML to the given IO
-  def to_yaml(io : IO) : Nil
+  def to_kyaml(io : IO) : Nil
     KYAML.emit(raw, io)
   end
 
   # emits this value as KYAML and returns it as a string
-  def to_yaml : String
+  def to_kyaml : String
     KYAML.emit(raw)
   end
 
