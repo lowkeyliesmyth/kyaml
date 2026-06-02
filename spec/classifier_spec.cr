@@ -70,5 +70,23 @@ describe KYAML::Classifier do
       result.commented.should contain(root)
       result.commented.should contain(outer_val)
     end
+
+    it "attaches a comment in the key-to-nested-value gap as leading on the first child" do
+      input = <<-YAML
+        outer:
+          # on inner
+          inner: 1
+        next: 2
+        YAML
+      doc = YAML::Nodes.parse(input)
+      comments = KYAML::CommentScanner.scan(input)
+      result = KYAML::Classifier.classify(doc, comments)
+      root = doc.nodes.first.as(YAML::Nodes::Mapping)
+      outer_val = root.nodes[1].as(YAML::Nodes::Mapping)
+      inner_key = outer_val.nodes[0]
+      next_key = root.nodes[2]
+      result.leading[inner_key]?.try(&.map(&.text)).should eq([" on inner"])
+      result.leading[next_key]?.should be_nil
+    end
   end
 end
