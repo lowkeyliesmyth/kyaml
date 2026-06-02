@@ -77,9 +77,13 @@ module KYAML
     private def classify_into(cmt : KYAML::Comment, container : YAML::Nodes::Node, child_indent : Int32, result : ClassifiedComments) : Nil # ameba:disable Metrics/CyclomaticComplexity
       units = child_units(container)
 
-      units.each do |_, v|
-        if (v.is_a?(YAML::Nodes::Mapping) || v.is_a?(YAML::Nodes::Sequence)) &&
-           cmt.line >= v.start_line && cmt.line <= v.end_line
+      units.each do |k, v|
+        next unless v.is_a?(YAML::Nodes::Mapping) || v.is_a?(YAML::Nodes::Sequence)
+        # A nested container's libyaml start_line starts at its first child's line, so a comment in the gap between a mapping key and its nested value falls outside [start_line, end_line].
+        # For mappings (where k != v) use the key's end_line as the lower bound to include that gap.
+        # Sequences (where k == v) keep the element's own start_line.
+        lower = k.same?(v) ? v.start_line : k.end_line + 1
+        if cmt.line >= lower && cmt.line <= v.end_line
           inner_indent = child_indent_of(v)
           if cmt.column >= inner_indent
             classify_into(cmt, v, inner_indent, result)
