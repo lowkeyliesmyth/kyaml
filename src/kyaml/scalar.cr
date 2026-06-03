@@ -2,7 +2,7 @@ require "yaml"
 require "./error"
 
 module KYAML
-  # Statless rendering of KYAML scalar leaves and mapping keys, shared by the `Emitter` and `Builder` for consistency.
+  # Stateless rendering of KYAML scalar leaves and mapping keys, shared by the `Emitter` and `Builder` for consistency.
   # Every method writes directly to *io*.
   # *indent* is the callers current indentation level, used for multi-line flow-folded string layout.
   module Scalar
