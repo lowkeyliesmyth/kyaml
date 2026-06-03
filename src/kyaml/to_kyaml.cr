@@ -33,42 +33,42 @@ module KYAML
   end
 
   # Normalizes a basic typed value into the `KYAML::Any::Type` union so the emitter can render it. Recurses through Arrays and Hashes.
-  private def self.normalize(value : Nil) : KYAML::Any::Type
+  def self.normalize(value : Nil) : KYAML::Any::Type
     nil
   end
 
   # :nodoc:
-  private def self.normalize(value : Bool) : KYAML::Any::Type
+  def self.normalize(value : Bool) : KYAML::Any::Type
     value
   end
 
   # :nodoc:
-  private def self.normalize(value : Int) : KYAML::Any::Type
+  def self.normalize(value : Int) : KYAML::Any::Type
     value.to_i64
   end
 
   # :nodoc:
-  private def self.normalize(value : Float) : KYAML::Any::Type
+  def self.normalize(value : Float) : KYAML::Any::Type
     value.to_f64
   end
 
   # :nodoc:
-  private def self.normalize(value : String | Symbol | Char) : KYAML::Any::Type
+  def self.normalize(value : String | Symbol | Char) : KYAML::Any::Type
     value.to_s
   end
 
   # :nodoc:
-  private def self.normalize(value : KYAML::Any) : KYAML::Any::Type
+  def self.normalize(value : KYAML::Any) : KYAML::Any::Type
     value.raw
   end
 
   # :nodoc:
-  private def self.normalize(value : Array) : KYAML::Any::Type
+  def self.normalize(value : Array) : KYAML::Any::Type
     value.map { |elem| KYAML::Any.new(normalize(elem)) }
   end
 
   # :nodoc:
-  private def self.normalize(value : Hash) : KYAML::Any::Type
+  def self.normalize(value : Hash) : KYAML::Any::Type
     normalized = {} of String => KYAML::Any
     value.each do |k, v|
       normalized[k.to_s] = KYAML::Any.new(normalize(v))
