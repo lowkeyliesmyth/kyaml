@@ -192,3 +192,21 @@ describe "KYAML::Serializable (presence)" do
     p.kyaml_present?("full_name").should be_true
   end
 end
+
+private struct Defaulted
+  include KYAML::Serializable
+  property name : String
+  property retries : Int32 = 3
+end
+
+describe "KYAML::Serializable (defaulted field)" do
+  it "falls back to a non-ignored field's default when the key is omitted" do
+    dft = Defaulted.from_kyaml(%({ name: "foo"}))
+    dft.name.should eq("foo")
+    dft.retries.should eq(3)
+  end
+
+  it "uses the provided value when the key is present" do
+    Defaulted.from_kyaml(%({ name: "foo", retries: 5})).retries.should eq(5)
+  end
+end

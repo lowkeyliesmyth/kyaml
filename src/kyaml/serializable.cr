@@ -79,11 +79,7 @@ module KYAML
               if %found{ivar.id}
                 @{{ivar.id}} = %value{ivar.id}.as({{ivar.type}})
               else
-                {% if ivar.has_default_value? %}
-                  @{{ivar.id}} = %value{ivar.id}.as({{ivar.type}})
-                {% elsif ivar.type.nilable? %}
-                  @{{ivar.id}} = nil
-                {% else %}
+                {% unless ivar.has_default_value? || ivar.type.nilable? %}
                   raise KYAML::ParseError.new("missing required KYAML field for {{@type}}", mapping.start_line)
                 {% end %}
               end
