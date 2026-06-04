@@ -25,22 +25,6 @@ private struct Account
   end
 end
 
-private struct StrictPoint
-  include KYAML::Serializable
-  include KYAML::Serializable::Strict
-  property x : Int32
-  property y : Int32
-
-  # def initialize(@x, @y)
-  # end
-end
-
-private struct LenientBag
-  include KYAML::Serializable
-  include KYAML::Serializable::Unmapped
-  property name : String
-end
-
 describe "KYAML::Serializable (to_kyaml)" do
   it "serializes a flat struct" do
     Point.new(1, 2).to_kyaml.should eq("{\n  x: 1,\n  y: 2,\n}")
@@ -112,6 +96,13 @@ describe "KYAML::Serializable (from_kyaml)" do
   end
 end
 
+private struct StrictPoint
+  include KYAML::Serializable
+  include KYAML::Serializable::Strict
+  property x : Int32
+  property y : Int32
+end
+
 describe "KYAML::Serializable::Strict" do
   it "raises on an unknown attribute" do
     expect_raises(KYAML::ParseError, /unknown KYAML attribute: extra/) do
@@ -124,6 +115,12 @@ describe "KYAML::Serializable::Strict" do
   end
 end
 
+private struct LenientBag
+  include KYAML::Serializable
+  include KYAML::Serializable::Unmapped
+  property name : String
+end
+
 describe "KYAML::Serializable::Unmapped" do
   it "captures unknown atributes into kyaml_unmapped" do
     bag = LenientBag.from_kyaml(%({ name: "Ada", extra: 99, note: "hi" }))
@@ -134,5 +131,64 @@ describe "KYAML::Serializable::Unmapped" do
 
   it "leaves kyaml_unmapped empty when there are no extras" do
     LenientBag.from_kyaml(%({ name: "Ada" })).kyaml_unmapped.empty?.should be_true
+  end
+end
+
+private struct NullableEmit
+  include KYAML::Serializable
+
+  @[KYAML::Field(emit_null: true)]
+  property mid : String?
+  property tail : String?
+
+  def initialize(@mid = nil, @tail = nil)
+  end
+end
+
+describe "KYAML::Serializable (emit_null)" do
+  it "emits a nil field as null only when emit_null annotation is set" do
+    out = NullableEmit.new.to_kyaml
+    out.should contain("mid: null")
+    out.should_not contain("tail")
+  end
+end
+
+private struct Probe
+  include KYAML::Serializable
+
+  @[KYAML::Field(presence: true)]
+  property note : String?
+  property count : Int32
+  @[KYAML::Field(presence: true, key: "full_name")]
+  property name : String?
+
+  def initialize(@count, @note = nil, @name = nil)
+  end
+end
+
+describe "KYAML::Serializable (presence)" do
+  it "reports a tracked key as present when it appears" do
+    Probe.from_kyaml(%({ note: "hi", count: 1})).kyaml_present?("note").should be_true
+  end
+
+  it "reports a tracked key as absent when it is missing" do
+    p = Probe.from_kyaml(%({ count: 1 }))
+    p.note.should be_nil
+    p.kyaml_present?("note").should be_false
+  end
+
+  # There is a semantic difference between an explicit null and an absent key, especially when trying to differentiate between if we're modifying a program-controlled default value or a user-specified override value.
+  #
+  # The value is the same, but the _intent_ behind it is different. Presence is only meaningful for **nilable or defaulted** fields, because those are the cases where the value alone cannot tell you intent.
+  it "differentiates between an explicit null and just an absent key" do
+    p = Probe.from_kyaml(%({ note: null, count: 1}))
+    p.note.should be_nil
+    p.kyaml_present?("note").should be_true
+  end
+
+  it "differentiates between an explicit null and just an absent key on renamed fields" do
+    p = Probe.from_kyaml(%({ note: null, count: 1, full_name: null}))
+    p.name.should be_nil
+    p.kyaml_present?("full_name").should be_true
   end
 end

@@ -87,10 +87,16 @@ module KYAML
                   raise KYAML::ParseError.new("missing required KYAML field for {{@type}}", mapping.start_line)
                 {% end %}
               end
+              # presence: record the doc key when it was present in the input.
+              # Runs in this method body, which is the only scope where @type.instance_vars is available, so no per-field accessor is generated at type scope.
+              {% if ann && ann[:presence] %}
+                {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
+                kyaml_presence << {{kyaml_key}} if %found{ivar.id}
+              {% end %}
             {% end %}
           {% end %}
         {% end %}
-        {% end %}
+      {% end %}
       end
     end
 
@@ -102,11 +108,18 @@ module KYAML
           {% ann = ivar.annotation(::KYAML::Field) %}
           {% unless ann && ann[:ignore] %}
             {% key = (ann && ann[:key]) || ivar.stringify %}
-            unless @{{ivar.id}}.nil?
+            {% if ann && ann[:emit_null] %}
+              #emit_null: always emit the key, even when value is nil
               builder.field({{key}}) do
                 @{{ivar.id}}.to_kyaml(builder)
               end
-            end
+            {% else %}
+              unless @{{ivar.id}}.nil?
+                builder.field({{key}}) do
+                  @{{ivar.id}}.to_kyaml(builder)
+                end
+              end
+           {% end %}
           {% end %}
         {% end %}
       end
@@ -122,11 +135,24 @@ module KYAML
       String.build { |io| to_kyaml(io) }
     end
 
+    # Set of KYAML doc keys that were present in the parsed input for fields marked with `@[KYAML::Field(presence: true)]` and populated during deserialization. Declared default keeps this auto-initialized for every constructor.
+    #
+    # Annotated with `ignore: true` so that this meta-field is never considered as a de/serializable.
+    @[KYAML::Field(ignore: true)]
+    getter kyaml_presence = Set(String).new
+
+    # Returns true if KYAML doc *key* (post-rename) was present in the parsed input. Only meaningful for fields declared with `@[KYAML::Field(presence: true)]`, otherwise returns false.
+    #
+    # Deviation from upstream YAML due to type scope and macro timing, so _presence_ is exposed through this predicate.
+    def kyaml_present?(key : String) : Bool
+      kyaml_presence.includes?(key)
+    end
+
     # Hook invoked once per mapping key that matches undeclared fields.
     # Lenient mode ignores unknown keys.
     # Include `KYAML::Serializable::Strict` to reject them, or `KYAML::Serializable::Unmapped` to capture them.
     #
-    # Defined in module body so the varint (strict, unmapped) modes below can override through the ancestor chain.
+    # Defined in module body so the variant (strict, unmapped) modes below can override through the ancestor chain.
     protected def on_unknown_kyaml_attribute(
       ctx : YAML::ParseContext,
       key : String,
