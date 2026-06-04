@@ -2,6 +2,7 @@ require "./any"
 require "./comment"
 require "./error"
 require "./classifier"
+require "./scalar"
 require "yaml"
 
 module KYAML
@@ -13,104 +14,13 @@ module KYAML
 
     def emit(value : KYAML::Any::Type, source : YAML::Nodes::Node? = nil) : Nil
       case value
-      in Nil
-        @io << "null"
-      in Bool
-        @io << value
-      in Int64
-        @io << value
-      in Float64
-        emit_float(value)
-      in String
-        emit_string(value)
-      in Array(KYAML::Any)
-        emit_sequence(value, source)
-      in Hash(String, KYAML::Any)
-        emit_mapping(value, source)
-      end
-    end
-
-    # Emits finite floats to `Emitter.io`.
-    # Fails loudly on INIFINITE/NAN floats as KYAML spec has no literal representation for them.
-    private def emit_float(value : Float64) : Nil
-      unless value.finite?
-        raise KYAML::EmitError.new("cannot emit non-finite float: #{value}")
-      end
-      @io << value
-    end
-
-    # Emits strings to `Emitter.io`, escaping special characters as needed.
-    #
-    # Single-line strings are emitted inline.
-    #
-    # Multiline strings are rendered with YAML flow-folding.
-    private def emit_string(value : String) : Nil
-      if value.includes?('\n')
-        emit_folded_string(value)
-      else
-        @io << '"'
-        value.each_char do |char|
-          emit_escaped_char(char)
-        end
-        @io << '"'
-      end
-    end
-
-    # Emits a single character with proper KYAML escaping applied.
-    #
-    # Common whitespace and structural characters are named and escaped here.
-    # Printable ASCII is emitted literally. Control characters and non-ASCII Unicode characters are escaped to a `\uXXXX` (BMP) or `\UXXXXXXXX` (full Unicode _astral plane?!_) sequence.
-    private def emit_escaped_char(char : Char) : Nil
-      case char
-      when '"'             then @io << "\\\""
-      when '\\'            then @io << "\\\\"
-      when '\n'            then @io << "\\n"
-      when '\t'            then @io << "\\t"
-      when '\r'            then @io << "\\r"
-      when .ascii_control? then emit_unicode_escape(char)
-      when .ascii?         then @io << char
-      else                      emit_unicode_escape(char)
-      end
-    end
-
-    # Emits *char*s as a fixed-width Unicode escape: `\uXXXX` (Basic Multilingual Plane) or `\UXXXXXXXX` (full Unicode _astral plane?!_).
-    #
-    # Hex is upcased and zero-padded to the full 4/8-digit width.
-    private def emit_unicode_escape(char : Char) : Nil
-      cp = char.ord
-      if cp <= 0xFFFF
-        @io << "\\u" << cp.to_s(16).rjust(4, '0').upcase
-      else
-        @io << "\\U" << cp.to_s(16).rjust(8, '0').upcase
-      end
-    end
-
-    # Emits *value* as a YAML flowfolded and doublequoted scalar to `Emitter.io`.
-    #
-    # *value* is wrapped at newlines with a `\` escaped linebreak and a one-level cosmetic indent applied for readability. Defers to `emit_folded_segment` to inject meaningful leading space `\u0020` anchor.
-    private def emit_folded_string(value : String) : Nil
-      @io << "\"\\\n"
-      @indent += 1
-      segments = value.split("\n")
-      segments.each_with_index do |segment, i|
-        write_indent
-        emit_folded_segment(segment)
-        @io << "\\n\\\n" if i < segments.size - 1
-      end
-      @indent -= 1
-      @io << '"'
-    end
-
-    # Emits a single newline-free *segment* of a folded string.
-    #
-    # A leading space `\u0020` anchor is injected to preserve indentation in the output.
-    private def emit_folded_segment(segment : String) : Nil
-      return if segment.empty?
-      if segment.starts_with?(' ')
-        @io << "\\u0020"
-        segment[1..].each_char { |char| emit_escaped_char(char) }
-      else
-        segment.each_char { |char| emit_escaped_char(char) }
+      in Nil                      then Scalar.write(@io, value, @indent)
+      in Bool                     then Scalar.write(@io, value, @indent)
+      in Int64                    then Scalar.write(@io, value, @indent)
+      in Float64                  then Scalar.write(@io, value, @indent)
+      in String                   then Scalar.write(@io, value, @indent)
+      in Array(KYAML::Any)        then emit_sequence(value, source)
+      in Hash(String, KYAML::Any) then emit_mapping(value, source)
       end
     end
 
@@ -242,7 +152,7 @@ module KYAML
         val_source = mapping.try &.nodes[i * 2 + 1]?
         emit_leading(key_source)
         write_indent
-        emit_key(k)
+        Scalar.key(@io, k, @indent)
         @io << ": "
         emit(v.raw, val_source)
         @io << ','
@@ -253,25 +163,6 @@ module KYAML
       @indent -= 1
       write_indent
       @io << '}'
-    end
-
-    # Emits *key* to `Emitter.io`, quoting only if necessary.
-    private def emit_key(key : String) : Nil
-      if safe_unquoted_key?(key)
-        @io << key
-      else
-        emit_string(key)
-      end
-    end
-
-    # Validates whether a given string key is safe or not to emit as a plain unquoted YAML key.
-    private def safe_unquoted_key?(key : String) : Bool
-      # first validate the key matches the allowed regex
-      return false unless key.matches?(/\A[A-Za-z_][A-Za-z0-9_\-.]*\z/)
-      probe = YAML::Nodes::Scalar.new(key)
-      probe.style = YAML::ScalarStyle::PLAIN
-      # then parse the key as a scalar and check it's a string
-      YAML::Schema::Core.parse_scalar(probe).is_a?(String)
     end
   end
 
