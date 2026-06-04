@@ -61,7 +61,11 @@ module KYAML
                 {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
                 when {{kyaml_key}}
                   %found{ivar.id} = true
-                  %value{ivar.id} = {{ivar.type}}.new(ctx, v_node)
+                  {% if ann && ann[:converter] %}
+                    %value{ivar.id} = {{ann[:converter]}}.from_kyaml(ctx, v_node)
+                  {% else %}
+                    %value{ivar.id} = {{ivar.type}}.new(ctx, v_node)
+                  {% end %}
               {% end %}
             {% end %}
             else
@@ -107,12 +111,20 @@ module KYAML
             {% if ann && ann[:emit_null] %}
               #emit_null: always emit the key, even when value is nil
               builder.field({{key}}) do
-                @{{ivar.id}}.to_kyaml(builder)
+                {% if ann && ann[:converter] %}
+                  {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                {% else %}
+                  @{{ivar.id}}.to_kyaml(builder)
+                {% end %}
               end
             {% else %}
               unless @{{ivar.id}}.nil?
                 builder.field({{key}}) do
-                  @{{ivar.id}}.to_kyaml(builder)
+                  {% if ann && ann[:converter] %}
+                    {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                  {% else %}
+                    @{{ivar.id}}.to_kyaml(builder)
+                  {% end %}
                 end
               end
            {% end %}

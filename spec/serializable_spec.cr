@@ -210,3 +210,37 @@ describe "KYAML::Serializable (defaulted field)" do
     Defaulted.from_kyaml(%({ name: "foo", retries: 5})).retries.should eq(5)
   end
 end
+
+private module EpochConverter
+  def self.from_kyaml(ctx : YAML::ParseContext, node : YAML::Nodes::Node) : Time
+    raise "expected scalar" unless node.is_a?(YAML::Nodes::Scalar)
+    Time.unix(node.value.to_i64)
+  end
+
+  def self.to_kyaml(value : Time, builder : KYAML::Builder) : Nil
+    builder.scalar(value.to_unix)
+  end
+end
+
+private struct Event
+  include KYAML::Serializable
+
+  property name : String
+  @[KYAML::Field(converter: EpochConverter)]
+  property at : Time
+
+  def initialize(@name, @at)
+  end
+end
+
+describe "KYAML::Serializable (converter)" do
+  it "round-trips a field through a custom converter" do
+    t = Time.unix(1_700_000_000)
+    kyaml = Event.new("deploy", t).to_kyaml
+    kyaml.should contain("at: 1700000000")
+
+    back = Event.from_kyaml(kyaml)
+    back.name.should eq("deploy")
+    back.at.should eq(t)
+  end
+end
