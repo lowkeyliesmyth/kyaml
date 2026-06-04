@@ -65,18 +65,14 @@ module KYAML
               {% end %}
             {% end %}
             else
-              # unknown key: ignored in lenient mode, TODO strict mode
+              on_unknown_kyaml_attribute(ctx, k_node.value, k_node, v_node)
             end
           end
 
           {% for ivar in @type.instance_vars %}
             {% ann = ivar.annotation(::KYAML::Field) %}
             {% if ann && ann[:ignore] %}
-              {% if ivar.has_default_value? %}
-                @{{ivar.id}} = {{ivar.default_value}}
-              {% elsif ivar.type.nilable? %}
-                @{{ivar.id}} = nil
-              {% else %}
+              {% unless ivar.has_default_value? || ivar.type.nilable? %}
                 {% raise "KYAML::Field(ignore: true) on '#{ivar.name}' of #{@type} needs a default or nilable type" %}
               {% end %}
             {% else %}
@@ -124,6 +120,47 @@ module KYAML
     # Emits this object as KYAML and returns it as a `String`.
     def to_kyaml : String
       String.build { |io| to_kyaml(io) }
+    end
+
+    # Hook invoked once per mapping key that matches undeclared fields.
+    # Lenient mode ignores unknown keys.
+    # Include `KYAML::Serializable::Strict` to reject them, or `KYAML::Serializable::Unmapped` to capture them.
+    #
+    # Defined in module body so the varint (strict, unmapped) modes below can override through the ancestor chain.
+    protected def on_unknown_kyaml_attribute(
+      ctx : YAML::ParseContext,
+      key : String,
+      key_node : YAML::Nodes::Node,
+      value_node : YAML::Nodes::Node,
+    ) : Nil
+    end
+
+    # Variant mixin: reject any mapping key that maps to undeclared fields.
+    # Include it *in addition to* `KYAML::Serializable`.
+    module Strict
+      protected def on_unknown_kyaml_attribute(
+        ctx : YAML::ParseContext,
+        key : String,
+        key_node : YAML::Nodes::Node,
+        value_node : YAML::Nodes::Node,
+      ) : Nil
+        raise KYAML::ParseError.new("unknown KYAML attribute: #{key}", key_node.start_line)
+      end
+    end
+
+    # Variant mixin: capture unmapped entries into #kyaml_unmapped` instead of discarding them. Include it *in addition to* `KYAML::Serializable`.
+    module Unmapped
+      @[KYAML::Field(ignore: true)]
+      property kyaml_unmapped = Hash(String, KYAML::Any).new
+
+      protected def on_unknown_kyaml_attribute(
+        ctx : YAML::ParseContext,
+        key : String,
+        key_node : YAML::Nodes::Node,
+        value_node : YAML::Nodes::Node,
+      ) : Nil
+        kyaml_unmapped[key] = KYAML::Any.new(ctx, value_node)
+      end
     end
   end
 end
