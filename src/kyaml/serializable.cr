@@ -25,6 +25,18 @@ module KYAML
         instance
       end
 
+      # Re-establishes a field-reading constructor on every subclass to enable a subclass of a base that calls `use_kyaml_discriminator` to avoid recursing into itself.
+      #
+      # Mirrors upstread stdlib behavior.
+      macro inherited
+        def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+          instance = allocate
+          instance.initialize(__kyaml_ctx: ctx, __kyaml_node: node)
+          GC.add_finalizer(instance) if instance.responds_to?(:finalize)
+          instance
+        end
+      end
+
       # Parses *input* (K/YAML text/IO) into an instance.
       def self.from_kyaml(input : String | IO)
         ctx = YAML::ParseContext.new
@@ -61,40 +73,43 @@ module KYAML
                 {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
                 when {{kyaml_key}}
                   %found{ivar.id} = true
-                  %value{ivar.id} = {{ivar.type}}.new(ctx, v_node)
+                  {% if ann && ann[:converter] %}
+                    %value{ivar.id} = {{ann[:converter]}}.from_kyaml(ctx, v_node)
+                  {% else %}
+                    %value{ivar.id} = {{ivar.type}}.new(ctx, v_node)
+                  {% end %}
               {% end %}
             {% end %}
             else
-              # unknown key: ignored in lenient mode, TODO strict mode
+              on_unknown_kyaml_attribute(ctx, k_node.value, k_node, v_node)
             end
           end
 
           {% for ivar in @type.instance_vars %}
             {% ann = ivar.annotation(::KYAML::Field) %}
             {% if ann && ann[:ignore] %}
-              {% if ivar.has_default_value? %}
-                @{{ivar.id}} = {{ivar.default_value}}
-              {% elsif ivar.type.nilable? %}
-                @{{ivar.id}} = nil
-              {% else %}
+              {% unless ivar.has_default_value? || ivar.type.nilable? %}
                 {% raise "KYAML::Field(ignore: true) on '#{ivar.name}' of #{@type} needs a default or nilable type" %}
               {% end %}
             {% else %}
               if %found{ivar.id}
                 @{{ivar.id}} = %value{ivar.id}.as({{ivar.type}})
               else
-                {% if ivar.has_default_value? %}
-                  @{{ivar.id}} = %value{ivar.id}.as({{ivar.type}})
-                {% elsif ivar.type.nilable? %}
-                  @{{ivar.id}} = nil
-                {% else %}
+                {% unless ivar.has_default_value? || ivar.type.nilable? %}
                   raise KYAML::ParseError.new("missing required KYAML field for {{@type}}", mapping.start_line)
                 {% end %}
               end
+              # presence: record the doc key when it was present in the input.
+              # Runs in this method body, which is the only scope where @type.instance_vars is available, so no per-field accessor is generated at type scope.
+              {% if ann && ann[:presence] %}
+                {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
+                kyaml_presence << {{kyaml_key}} if %found{ivar.id}
+              {% end %}
             {% end %}
           {% end %}
         {% end %}
-        {% end %}
+      {% end %}
+      after_initialize
       end
     end
 
@@ -102,17 +117,37 @@ module KYAML
     # Honors `@[KYAML::Field(key:)]` renames, skips `ignore: true` and nil fields.
     def to_kyaml(builder : KYAML::Builder) : Nil
       builder.mapping do
+        {% begin %}
+        {% options = @type.annotation(::KYAML::Serializable::Options) %}
+        {% emit_nulls = options && options[:emit_nulls] %}
         {% for ivar in @type.instance_vars %}
           {% ann = ivar.annotation(::KYAML::Field) %}
           {% unless ann && ann[:ignore] %}
             {% key = (ann && ann[:key]) || ivar.stringify %}
-            unless @{{ivar.id}}.nil?
+            {% if (ann && ann[:emit_null]) || emit_nulls %}
+              # emit_null (field) / Options(emit_nulls) (type): always emit, even when nil
               builder.field({{key}}) do
-                @{{ivar.id}}.to_kyaml(builder)
+                {% if ann && ann[:converter] %}
+                  {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                {% else %}
+                  @{{ivar.id}}.to_kyaml(builder)
+                {% end %}
               end
-            end
+            {% else %}
+              unless @{{ivar.id}}.nil?
+                builder.field({{key}}) do
+                  {% if ann && ann[:converter] %}
+                    {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                  {% else %}
+                    @{{ivar.id}}.to_kyaml(builder)
+                  {% end %}
+                end
+              end
+           {% end %}
           {% end %}
         {% end %}
+      {% end %}
+        on_to_kyaml(builder)
       end
     end
 
@@ -124,6 +159,129 @@ module KYAML
     # Emits this object as KYAML and returns it as a `String`.
     def to_kyaml : String
       String.build { |io| to_kyaml(io) }
+    end
+
+    # Set of KYAML doc keys that were present in the parsed input for fields marked with `@[KYAML::Field(presence: true)]` and populated during deserialization. Declared default keeps this auto-initialized for every constructor.
+    #
+    # Annotated with `ignore: true` so that this meta-field is never considered as a de/serializable.
+    @[KYAML::Field(ignore: true)]
+    getter kyaml_presence = Set(String).new
+
+    # Returns true if KYAML doc *key* (post-rename) was present in the parsed input. Only meaningful for fields declared with `@[KYAML::Field(presence: true)]`, otherwise returns false.
+    #
+    # Deviation from upstream YAML due to type scope and macro timing, so _presence_ is exposed through this predicate.
+    def kyaml_present?(key : String) : Bool
+      kyaml_presence.includes?(key)
+    end
+
+    # Hook invoked at the end of deser, after all fields are assigned.
+    # Override her to derive computed fields or validate cross-field invariants.
+    #
+    # No-op by default, exists to be overridden through the ancestor chain.
+    protected def after_initialize
+    end
+
+    # HOok invoked at tail of `to_kyaml(builder` inside the mapping but after all declared fields are emitted.
+    #
+    # No-op by default, exists so that `KYAML::Serializable::Unmapped` can override it to append captured unknown keys so they round-trip.
+    protected def on_to_kyaml(builder : KYAML::Builder) : Nil
+    end
+
+    # Hook invoked once per mapping key that matches undeclared fields.
+    # Lenient mode ignores unknown keys.
+    # Include `KYAML::Serializable::Strict` to reject them, or `KYAML::Serializable::Unmapped` to capture them.
+    #
+    # Defined in module body so the variant (strict, unmapped) modes below can override through the ancestor chain.
+    protected def on_unknown_kyaml_attribute(
+      ctx : YAML::ParseContext,
+      key : String,
+      key_node : YAML::Nodes::Node,
+      value_node : YAML::Nodes::Node,
+    ) : Nil
+    end
+
+    # Enables polymorphic deserialization (choosing a runtime type from an imported data field) via `use_kyaml_discriminator`.
+    #
+    # Call it in an abstract base type that includes `KYAML::Serializable`. *field* is the discriminator key, and *mapping* maps each discriminator value to the concrete subtype to generate.
+    #
+    # ```
+    # abstract class Shape
+    #   include KYAML::Serializable
+    #   use_kyaml_discriminator "kind", {circle: Circle, rectangle: Rectangle}
+    #   property kind : String
+    # end
+    # ```
+    macro use_kyaml_discriminator(field, mapping)
+    {% unless mapping.is_a?(HashLiteral) || mapping.is_a?(NamedTupleLiteral) %}
+      {% mapping.raise "mapping arg must be a HashLiteral or NamedTupleLiteral, not #{mapping.class_name.id}" %}
+    {% end %}
+
+      def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+        node_mapping = node.as?(YAML::Nodes::Mapping)
+        if node_mapping.nil?
+          raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{@type}}")
+        end
+
+        discriminator = nil
+        node_mapping.each do |k_node, v_node|
+          next unless k_node.is_a?(YAML::Nodes::Scalar)
+          next unless k_node.value == {{field.id.stringify}}
+          unless v_node.is_a?(YAML::Nodes::Scalar)
+            raise KYAML::ParseError.new("KYAML discriminator field {{field.id}} must be a scalar")
+          end
+          discriminator = v_node.value
+          break
+        end
+
+        if discriminator.nil?
+          raise KYAML::ParseError.new("missing KYAML discriminator field {{field.id}}")
+        end
+
+        case discriminator
+        {% for k, v in mapping %}
+          when {{k.id.stringify}} then {{v.id}}.new(ctx, node)
+        {% end %}
+        else
+          raise KYAML::ParseError.new("unknown KYAML discriminator value '#{discriminator}' for {{field.id}}")
+        end
+      end
+    end
+
+    # Variant mixin: reject any mapping key that maps to undeclared fields.
+    # Include it *in addition to* `KYAML::Serializable`.
+    module Strict
+      protected def on_unknown_kyaml_attribute(
+        ctx : YAML::ParseContext,
+        key : String,
+        key_node : YAML::Nodes::Node,
+        value_node : YAML::Nodes::Node,
+      ) : Nil
+        raise KYAML::ParseError.new("unknown KYAML attribute: #{key}", key_node.start_line)
+      end
+    end
+
+    # Variant mixin: capture unmapped entries into #kyaml_unmapped` instead of discarding them. Include it *in addition to* `KYAML::Serializable`.
+    module Unmapped
+      @[KYAML::Field(ignore: true)]
+      property kyaml_unmapped = Hash(String, KYAML::Any).new
+
+      protected def on_unknown_kyaml_attribute(
+        ctx : YAML::ParseContext,
+        key : String,
+        key_node : YAML::Nodes::Node,
+        value_node : YAML::Nodes::Node,
+      ) : Nil
+        kyaml_unmapped[key] = KYAML::Any.new(ctx, value_node)
+      end
+
+      # Re-emit captured unknown keys so Unmapped types round-trip.
+      #
+      # Each val is a `KYAML::Any` holding the parsed tree, so `field(k, v)` rewraps and the emitter renders it.
+      protected def on_to_kyaml(builder : KYAML::Builder) : Nil
+        kyaml_unmapped.each do |k, v|
+          builder.field(k, v)
+        end
+      end
     end
   end
 end
