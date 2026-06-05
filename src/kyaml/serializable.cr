@@ -97,6 +97,7 @@ module KYAML
           {% end %}
         {% end %}
       {% end %}
+      after_initialize
       end
     end
 
@@ -154,6 +155,13 @@ module KYAML
     # Deviation from upstream YAML due to type scope and macro timing, so _presence_ is exposed through this predicate.
     def kyaml_present?(key : String) : Bool
       kyaml_presence.includes?(key)
+    end
+
+    # Hook invoked at the end of deser, after all fields are assigned.
+    # Override her to derive computed fields or validate cross-field invariants.
+    #
+    # No-op by default, exists to be overridden through the ancestor chain.
+    protected def after_initialize
     end
 
     # Hook invoked once per mapping key that matches undeclared fields.

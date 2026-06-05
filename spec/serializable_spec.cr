@@ -244,3 +244,22 @@ describe "KYAML::Serializable (converter)" do
     back.at.should eq(t)
   end
 end
+
+private struct Derived
+  include KYAML::Serializable
+
+  property name : String
+
+  @[KYAML::Field(ignore: true)]
+  property shout : String = " "
+
+  protected def after_initialize
+    @shout = name.upcase
+  end
+end
+
+describe "KYAML::Serializable (after_initialize)" do
+  it "runs after_initialize once every field is assigned" do
+    Derived.from_kyaml(%({ name: "ada"})).shout.should eq("ADA")
+  end
+end
