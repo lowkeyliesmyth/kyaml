@@ -297,3 +297,45 @@ describe "KYAML::Serializable (use_kyaml_descriminator)" do
     end
   end
 end
+
+@[KYAML::Serializable::Options(emit_nulls: true)]
+private struct EmitAllNulls
+  include KYAML::Serializable
+  property a : String?
+  property b : Int32?
+
+  def initialize(@a = nil, @b = nil)
+  end
+end
+
+describe "KYAML::Serializable (Options emit_nulls)" do
+  it "emits every nilable field as null when the type opts in" do
+    out = EmitAllNulls.new.to_kyaml
+    out.should contain("a: null")
+    out.should contain("b: null")
+  end
+end
+
+private struct Bag
+  include KYAML::Serializable
+  include KYAML::Serializable::Unmapped
+  property name : String
+
+  def initialize(@name)
+  end
+end
+
+describe "KYAML::Serializable::Unmapped (round-trip re-emit)" do
+  it "round-trips captured unknown keys, includes nested structures" do
+    bag = Bag.from_kyaml(%({ name: "ada", extra: 67, nested: { a: 1}}))
+    bagout = bag.to_kyaml
+    bagout.should contain(%(name: "ada"))
+    bagout.should contain(%(extra: 67))
+    bagout.should contain(%(nested: {))
+
+    # full round-trip: parse->emit->parse
+    again = Bag.from_kyaml(bagout)
+    again.kyaml_unmapped["extra"].should eq(67)
+    again.kyaml_unmapped["nested"]["a"].should eq(1)
+  end
+end

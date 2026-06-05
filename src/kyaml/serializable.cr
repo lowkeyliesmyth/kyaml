@@ -117,12 +117,15 @@ module KYAML
     # Honors `@[KYAML::Field(key:)]` renames, skips `ignore: true` and nil fields.
     def to_kyaml(builder : KYAML::Builder) : Nil
       builder.mapping do
+        {% begin %}
+        {% options = @type.annotation(::KYAML::Serializable::Options) %}
+        {% emit_nulls = options && options[:emit_nulls] %}
         {% for ivar in @type.instance_vars %}
           {% ann = ivar.annotation(::KYAML::Field) %}
           {% unless ann && ann[:ignore] %}
             {% key = (ann && ann[:key]) || ivar.stringify %}
-            {% if ann && ann[:emit_null] %}
-              #emit_null: always emit the key, even when value is nil
+            {% if (ann && ann[:emit_null]) || emit_nulls %}
+              # emit_null (field) / Options(emit_nulls) (type): always emit, even when nil
               builder.field({{key}}) do
                 {% if ann && ann[:converter] %}
                   {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
@@ -143,6 +146,8 @@ module KYAML
            {% end %}
           {% end %}
         {% end %}
+      {% end %}
+        on_to_kyaml(builder)
       end
     end
 
@@ -174,6 +179,12 @@ module KYAML
     #
     # No-op by default, exists to be overridden through the ancestor chain.
     protected def after_initialize
+    end
+
+    # HOok invoked at tail of `to_kyaml(builder` inside the mapping but after all declared fields are emitted.
+    #
+    # No-op by default, exists so that `KYAML::Serializable::Unmapped` can override it to append captured unknown keys so they round-trip.
+    protected def on_to_kyaml(builder : KYAML::Builder) : Nil
     end
 
     # Hook invoked once per mapping key that matches undeclared fields.
@@ -261,6 +272,15 @@ module KYAML
         value_node : YAML::Nodes::Node,
       ) : Nil
         kyaml_unmapped[key] = KYAML::Any.new(ctx, value_node)
+      end
+
+      # Re-emit captured unknown keys so Unmapped types round-trip.
+      #
+      # Each val is a `KYAML::Any` holding the parsed tree, so `field(k, v)` rewraps and the emitter renders it.
+      protected def on_to_kyaml(builder : KYAML::Builder) : Nil
+        kyaml_unmapped.each do |k, v|
+          builder.field(k, v)
+        end
       end
     end
   end
