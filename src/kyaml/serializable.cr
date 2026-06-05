@@ -25,6 +25,18 @@ module KYAML
         instance
       end
 
+      # Re-establishes a field-reading constructor on every subclass to enable a subclass of a base that calls `use_kyaml_discriminator` to avoid recursing into itself.
+      #
+      # Mirrors upstread stdlib behavior.
+      macro inherited
+        def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+          instance = allocate
+          instance.initialize(__kyaml_ctx: ctx, __kyaml_node: node)
+          GC.add_finalizer(instance) if instance.responds_to?(:finalize)
+          instance
+        end
+      end
+
       # Parses *input* (K/YAML text/IO) into an instance.
       def self.from_kyaml(input : String | IO)
         ctx = YAML::ParseContext.new
@@ -175,6 +187,53 @@ module KYAML
       key_node : YAML::Nodes::Node,
       value_node : YAML::Nodes::Node,
     ) : Nil
+    end
+
+    # Enables polymorphic deserialization (choosing a runtime type from an imported data field) via `use_kyaml_discriminator`.
+    #
+    # Call it in an abstract base type that includes `KYAML::Serializable`. *field* is the discriminator key, and *mapping* maps each discriminator value to the concrete subtype to generate.
+    #
+    # ```
+    # abstract class Shape
+    #   include KYAML::Serializable
+    #   use_kyaml_discriminator "kind", {circle: Circle, rectangle: Rectangle}
+    #   property kind : String
+    # end
+    # ```
+    macro use_kyaml_discriminator(field, mapping)
+    {% unless mapping.is_a?(HashLiteral) || mapping.is_a?(NamedTupleLiteral) %}
+      {% mapping.raise "mapping arg must be a HashLiteral or NamedTupleLiteral, not #{mapping.class_name.id}" %}
+    {% end %}
+
+      def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+        node_mapping = node.as?(YAML::Nodes::Mapping)
+        if node_mapping.nil?
+          raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{@type}}")
+        end
+
+        discriminator = nil
+        node_mapping.each do |k_node, v_node|
+          next unless k_node.is_a?(YAML::Nodes::Scalar)
+          next unless k_node.value == {{field.id.stringify}}
+          unless v_node.is_a?(YAML::Nodes::Scalar)
+            raise KYAML::ParseError.new("KYAML discriminator field {{field.id}} must be a scalar")
+          end
+          discriminator = v_node.value
+          break
+        end
+
+        if discriminator.nil?
+          raise KYAML::ParseError.new("missing KYAML discriminator field {{field.id}}")
+        end
+
+        case discriminator
+        {% for k, v in mapping %}
+          when {{k.id.stringify}} then {{v.id}}.new(ctx, node)
+        {% end %}
+        else
+          raise KYAML::ParseError.new("unknown KYAML discriminator value '#{discriminator}' for {{field.id}}")
+        end
+      end
     end
 
     # Variant mixin: reject any mapping key that maps to undeclared fields.

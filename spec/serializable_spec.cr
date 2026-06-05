@@ -263,3 +263,37 @@ describe "KYAML::Serializable (after_initialize)" do
     Derived.from_kyaml(%({ name: "ada"})).shout.should eq("ADA")
   end
 end
+
+private abstract class DiscShape
+  include KYAML::Serializable
+  use_kyaml_discriminator "kind", {circle: DiscCircle, rectangle: DiscRectangle}
+  property kind : String
+end
+
+private class DiscCircle < DiscShape
+  property radius : Float64
+end
+
+private class DiscRectangle < DiscShape
+  property width : Float64
+  property height : Float64
+end
+
+describe "KYAML::Serializable (use_kyaml_descriminator)" do
+  it "deserializes into the subtype named by the discriminator" do
+    shape = DiscShape.from_kyaml(%({ kind: "circle", radius: 2.5 }))
+    shape.should be_a(DiscCircle)
+    shape.as(DiscCircle).radius.should eq(2.5)
+  end
+
+  it "dispatches to a different subtype by discriminator value" do
+    shape = DiscShape.from_kyaml(%({ kind: "rectangle", width: 3.0, height: 4.0 }))
+    shape.as(DiscRectangle).height.should eq(4.0)
+  end
+
+  it "raises on an unknown discriminator value" do
+    expect_raises(KYAML::ParseError, /unknown KYAML discriminator/) do
+      DiscShape.from_kyaml(%({ kind: "triangle" }))
+    end
+  end
+end
