@@ -1,3 +1,17 @@
+## 0.3.0 (2026-06-09)
+
+### Feat
+
+- **serializable**: add strict/unmapped modes, per-field emission controls, annotation extensions and polymorphic deserialization (#7)
+
+### Docs
+
+- **README**: expand kyaml readme with new quickstart usage sections (#9)
+
+### CI
+
+- **gha-docs**: split doc publishing out into its own workflow
+
 ## 0.2.0 (2026-06-05)
 
 ### Feat
