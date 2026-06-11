@@ -6,10 +6,10 @@ A Crystal implementation of KYAML (Kubernetes YAML), a less ambiguous YAML subse
 
 KYAML is a stricter subset of YAML designed to avoid some of its common pitfalls while still prioritizing ease of use:
 
-- **Not whitespace-sensitive**: Uses flow-style `{}` and `[]` for mappings and sequences instead of block-style indentation. Never get lost in indentation hell again.
+- **Not whitespace-sensitive**: Uses flow-style `{}` and `[]` for mappings and sequences instead of block-style indentation. Never get lost in indentation hell again!
 - **Still allows comments**: Unlike JSON, but like YAML. Because it _is_ YAML.
 - **Allows trailing commas**: Easier editing and cleaner diffs.
-- **Unambiguous strings**: Always double-quotes value strings to avoid the dreaded "Norway bug" (`NO` → `false`)
+- **Unambiguous strings**: Always double-quotes value strings to avoid the dreaded "Norway bug" (`NO` → `false`).
 - **Unquoted keys**: No need to quote keys unless they are ambiguous (e.g., `no`, `true`, `null`).
 
 Every KYAML doc is a valid YAML doc, so existing YAML tooling can still consume it! 
@@ -19,7 +19,7 @@ And now let's compare KYAML's features to our good ole friends YAML and JSON:
 | Feature | YAML | JSON | KYAML |
 |---|---|---|---|
 | Comments | Yes | No | Yes! |
-| Trailing commas | Yes | No | Yes |
+| Trailing commas | Yes | No | Yes! |
 | Quoted keys required | No | Yes | No! |
 | Whitespace sensitive | Yes | No | No! |
 | String value quoting | Optional | Required | Required |
@@ -63,7 +63,7 @@ Run `shards install`
 
 ### Parsing
 
-`KYAML.parse` returns a `KYAML::Any` you can traverse, directly mirroring `YAML::Any`:
+`KYAML.parse` returns a `KYAML::Any` you can traverse, directly mirroring `YAML::Any`
 
 ```crystal
 require "kyaml"
@@ -153,7 +153,7 @@ KYAML.emit_doc(doc) # both comments are preserved in output. pinky-swear.
 
 ### Streaming builder
 
-Build a KYAML doc imperatively in crystalwithout an intermediate object.
+Build a KYAML doc imperatively right in crystal without an intermediate object.
 
 ```crystal
 KYAML.build do |k|
