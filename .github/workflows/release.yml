@@ -80,6 +80,8 @@ jobs:
           # In dry-run mode, no tag is created, so derive the *would-be* version from cz output
           NEW_VERSION=$(cz version --project)
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          # shards only recognises release tags matching /^v\d/, so .cz.toml uses tag_format "v$version". cz reports the bare version, so re-add the prefix here to match the tag cz actually created.
+          echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Verify version alignment
         run: |
