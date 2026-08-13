@@ -37,7 +37,7 @@ struct KYAML::Any
   # - KYAML has no binary or set types, so Bytes and Set are omitted
   # - KYAML requires all map keys to be strings (JSON compatibility constraint)
 
-  alias Type = Array(KYAML::Any) | Bool | Float64 | Hash(String, KYAML::Any) | Int64 | String | Nil
+  alias Type = Array(KYAML::Any) | Bool | Float64 | Hash(String, KYAML::Any) | Int64 | String?
 
   getter raw : Type
 
@@ -139,14 +139,10 @@ struct KYAML::Any
     when Array
       if index_or_key.is_a?(Int)
         object[index_or_key]?
-      else
-        nil
       end
     when Hash
       if index_or_key.is_a?(String)
         object[index_or_key]?
-      else
-        nil
       end
     else
       raise KYAML::TypeError.new("Array or Hash", object.class.to_s)
@@ -173,8 +169,6 @@ struct KYAML::Any
       if index_or_key.is_a?(String)
         self[index_or_key]?
       end
-    else
-      nil
     end
   end
 
@@ -312,8 +306,6 @@ struct KYAML::Any
       raw.to_f32
     when Float64
       raw.to_f32
-    else
-      nil
     end
   end
 

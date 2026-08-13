@@ -71,11 +71,11 @@ describe "KYAML::Emitter" do
     it "folds a trailing-newline multiline string and round-trips it" do
       result = KYAML.emit("Line one\nLine two\n")
       expected = <<-'EXP'
-      "\
-        Line one\n\
-        Line two\n\
-        "
-      EXP
+        "\
+          Line one\n\
+          Line two\n\
+          "
+        EXP
       result.should eq(expected)
       YAML.parse(result).as_s.should eq("Line one\nLine two\n")
     end
@@ -83,10 +83,10 @@ describe "KYAML::Emitter" do
     it "folds a multiline string with no trailing newline" do
       result = KYAML.emit("a\nb")
       expected = <<-'EXP'
-      "\
-        a\n\
-        b"
-      EXP
+        "\
+          a\n\
+          b"
+        EXP
       result.should eq(expected)
       YAML.parse(result).as_s.should eq("a\nb")
     end
@@ -94,13 +94,13 @@ describe "KYAML::Emitter" do
     it "indents continuation lines one level past the mapping key" do
       result = KYAML.emit({"description" => KYAML::Any.new("Line one\nLine two\n")})
       expected = <<-'EXP'
-      {
-        description: "\
-          Line one\n\
-          Line two\n\
-          ",
-      }
-      EXP
+        {
+          description: "\
+            Line one\n\
+            Line two\n\
+            ",
+        }
+        EXP
       result.should eq(expected)
       YAML.parse(result)["description"].as_s.should eq("Line one\nLine two\n")
     end
@@ -108,10 +108,10 @@ describe "KYAML::Emitter" do
     it "preserves meaningful leading whitespace with a \\u0020 anchor" do
       result = KYAML.emit("a\n  indented")
       expected = <<-'EXP'
-      "\
-        a\n\
-        \u0020 indented"
-      EXP
+        "\
+          a\n\
+          \u0020 indented"
+        EXP
       result.should eq(expected)
       YAML.parse(result).as_s.should eq("a\n  indented")
     end
@@ -123,22 +123,22 @@ describe "KYAML::Emitter" do
 
     it "renders a single-element sequence as multi-line with trailing comma" do
       kyaml = <<-KYAML
-      [
-        "foo",
-      ]
-      KYAML
+        [
+          "foo",
+        ]
+        KYAML
       seq = [KYAML::Any.new("foo")]
       KYAML.emit(seq).should eq(kyaml)
     end
 
     it "renders mixed scalar elements as one per line" do
       kyaml = <<-KYAML
-    [
-      "foo",
-      42,
-      true,
-    ]
-    KYAML
+        [
+          "foo",
+          42,
+          true,
+        ]
+        KYAML
       seq = [KYAML::Any.new("foo"), KYAML::Any.new(42), KYAML::Any.new(true)]
       KYAML.emit(seq).should eq(kyaml)
     end
@@ -165,69 +165,69 @@ describe "KYAML::Emitter" do
 
     it "renders a single pair with a safe unquoted key" do
       kyaml = <<-KYAML
-      {
-        foo: "bar",
-      }
-      KYAML
+        {
+          foo: "bar",
+        }
+        KYAML
       h = {"foo" => KYAML::Any.new("bar")}
       KYAML.emit(h).should eq(kyaml)
     end
 
     it "preserves insertion order across multiple pairs" do
       kyaml = <<-KYAML
-      {
-        a: 1,
-        b: 2,
-        c: 3,
-      }
-      KYAML
+        {
+          a: 1,
+          b: 2,
+          c: 3,
+        }
+        KYAML
       h = {"a" => KYAML::Any.new(1), "b" => KYAML::Any.new(2), "c" => KYAML::Any.new(3)}
       KYAML.emit(h).should eq(kyaml)
     end
 
     it "quotes keys that resolve as known type-ambiguous words (bool/null/number)" do
       kyaml = <<-KYAML
-      {
-        "true": 1,
-        "null": 2,
-        "no": 3,
-      }
-      KYAML
+        {
+          "true": 1,
+          "null": 2,
+          "no": 3,
+        }
+        KYAML
       h = {"true" => KYAML::Any.new(1), "null" => KYAML::Any.new(2), "no" => KYAML::Any.new(3)}
       KYAML.emit(h).should eq(kyaml)
     end
 
     it "quotes keys with whitespace, colons, or other unsafe chars" do
       kyaml = <<-KYAML
-      {
-        "foo bar": 1,
-        "a:b": 2,
-      }
-      KYAML
+        {
+          "foo bar": 1,
+          "a:b": 2,
+        }
+        KYAML
       h = {"foo bar" => KYAML::Any.new(1), "a:b" => KYAML::Any.new(2)}
       KYAML.emit(h).should eq(kyaml)
     end
 
     it "quotes Norway-bug keys regardless of case" do
       kyaml = <<-KYAML
-      {
-        "NO": 1,
-        "On": 2,
-        "no": 3,
-      }
-      KYAML
+        {
+          "NO": 1,
+          "On": 2,
+          "no": 3,
+        }
+        KYAML
       h = {"NO" => KYAML::Any.new(1), "On" => KYAML::Any.new(2), "no" => KYAML::Any.new(3)}
       KYAML.emit(h).should eq(kyaml)
     end
 
     it "indents nested mappings with two spaces per level" do
       kyaml = <<-KYAML
-      {
-        metadata: {
-          name: "svc",
-        },
-      }
-      KYAML
+        {
+          metadata: {
+            name: "svc",
+          },
+        }
+        KYAML
 
       inner = {"name" => KYAML::Any.new("svc")}
       outer = {"metadata" => KYAML::Any.new(inner)}
@@ -238,22 +238,22 @@ describe "KYAML::Emitter" do
   describe "cuddling" do
     it "cuddles a sequence of mappings" do
       kyaml = <<-KYAML
-      [{
-        port: 80,
-      }]
-      KYAML
+        [{
+          port: 80,
+        }]
+        KYAML
       seq = [KYAML::Any.new({"port" => KYAML::Any.new(80)})]
       KYAML.emit(seq).should eq(kyaml)
     end
 
     it "cuddles multiple mapping elements" do
       kyaml = <<-KYAML
-      [{
-        port: 80,
-      }, {
-        port: 443,
-      }]
-      KYAML
+        [{
+          port: 80,
+        }, {
+          port: 443,
+        }]
+        KYAML
       seq = [
         KYAML::Any.new({"port" => KYAML::Any.new(80)}),
         KYAML::Any.new({"port" => KYAML::Any.new(443)}),
@@ -263,13 +263,13 @@ describe "KYAML::Emitter" do
 
     it "cuddles a sequence of sequences" do
       kyaml = <<-KYAML
-      [[
-        1,
-        2,
-      ], [
-        3,
-      ]]
-      KYAML
+        [[
+          1,
+          2,
+        ], [
+          3,
+        ]]
+        KYAML
       seq = [
         KYAML::Any.new([KYAML::Any.new(1), KYAML::Any.new(2)]),
         KYAML::Any.new([KYAML::Any.new(3)]),
@@ -278,15 +278,15 @@ describe "KYAML::Emitter" do
     end
     it "does not cuddle a sequence with mixed collection kinds" do
       kyaml = <<-KYAML
-      [
-        {
-          a: 1,
-        },
         [
-          2,
-        ],
-      ]
-      KYAML
+          {
+            a: 1,
+          },
+          [
+            2,
+          ],
+        ]
+        KYAML
 
       seq = [
         KYAML::Any.new({"a" => KYAML::Any.new(1)}),
@@ -297,13 +297,13 @@ describe "KYAML::Emitter" do
 
     it "does not cuddle a sequence with any scalar element" do
       kyaml = <<-KYAML
-      [
-        {
-          a: 1,
-        },
-        "scalar",
-      ]
-      KYAML
+        [
+          {
+            a: 1,
+          },
+          "scalar",
+        ]
+        KYAML
       seq = [
         KYAML::Any.new({"a" => KYAML::Any.new(1)}),
         KYAML::Any.new("scalar"),
@@ -313,27 +313,27 @@ describe "KYAML::Emitter" do
 
     it "does not cuddle a sequence with an empty collection" do
       kyaml = <<-KYAML
-      [
-        {
-          a: 1,
-        },
-        {},
-      ]
-      KYAML
+        [
+          {
+            a: 1,
+          },
+          {},
+        ]
+        KYAML
       seq = [KYAML::Any.new({"a" => KYAML::Any.new(1)}), KYAML::Any.new({} of String => KYAML::Any)]
       KYAML.emit(seq).should eq(kyaml)
     end
 
     it "cuddles inside a mapping value" do
       kyaml = <<-KYAML
-      {
-        ports: [{
-          port: 80,
-        }, {
-          port: 443,
-        }],
-      }
-      KYAML
+        {
+          ports: [{
+            port: 80,
+          }, {
+            port: 443,
+          }],
+        }
+        KYAML
       hash = {
         "ports" => KYAML::Any.new([
           KYAML::Any.new({"port" => KYAML::Any.new(80)}),

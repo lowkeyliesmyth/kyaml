@@ -147,7 +147,7 @@ describe KYAML::CommentScanner do
           - key: |
                   body
             sibling: 2 # tail
-        YAML
+          YAML
 
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
@@ -160,7 +160,7 @@ describe KYAML::CommentScanner do
           key: |
             body
           sibling: 2 # tail
-        YAML
+          YAML
 
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)

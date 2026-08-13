@@ -53,7 +53,7 @@ module KYAML
         {% begin %}
           mapping = node.as?(YAML::Nodes::Mapping)
           if mapping.nil?
-            raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{@type}}, got #{node.class}")
+            raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{ @type }}, got #{node.class}")
           end
 
           {% for ivar in @type.instance_vars %}
@@ -71,12 +71,12 @@ module KYAML
               {% ann = ivar.annotation(::KYAML::Field) %}
               {% unless ann && ann[:ignore] %}
                 {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
-                when {{kyaml_key}}
+                when {{ kyaml_key }}
                   %found{ivar.id} = true
                   {% if ann && ann[:converter] %}
-                    %value{ivar.id} = {{ann[:converter]}}.from_kyaml(ctx, v_node)
+                    %value{ivar.id} = {{ ann[:converter] }}.from_kyaml(ctx, v_node)
                   {% else %}
-                    %value{ivar.id} = {{ivar.type}}.new(ctx, v_node)
+                    %value{ivar.id} = {{ ivar.type }}.new(ctx, v_node)
                   {% end %}
               {% end %}
             {% end %}
@@ -93,17 +93,17 @@ module KYAML
               {% end %}
             {% else %}
               if %found{ivar.id}
-                @{{ivar.id}} = %value{ivar.id}.as({{ivar.type}})
+                @{{ ivar.id }} = %value{ivar.id}.as({{ ivar.type }})
               else
                 {% unless ivar.has_default_value? || ivar.type.nilable? %}
-                  raise KYAML::ParseError.new("missing required KYAML field for {{@type}}", mapping.start_line)
+                  raise KYAML::ParseError.new("missing required KYAML field for {{ @type }}", mapping.start_line)
                 {% end %}
               end
               # presence: record the doc key when it was present in the input.
               # Runs in this method body, which is the only scope where @type.instance_vars is available, so no per-field accessor is generated at type scope.
               {% if ann && ann[:presence] %}
                 {% kyaml_key = (ann && ann[:key]) || ivar.stringify %}
-                kyaml_presence << {{kyaml_key}} if %found{ivar.id}
+                kyaml_presence << {{ kyaml_key }} if %found{ivar.id}
               {% end %}
             {% end %}
           {% end %}
@@ -126,20 +126,20 @@ module KYAML
             {% key = (ann && ann[:key]) || ivar.stringify %}
             {% if (ann && ann[:emit_null]) || emit_nulls %}
               # emit_null (field) / Options(emit_nulls) (type): always emit, even when nil
-              builder.field({{key}}) do
+              builder.field({{ key }}) do
                 {% if ann && ann[:converter] %}
-                  {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                  {{ ann[:converter] }}.to_kyaml(@{{ ivar.id }}, builder)
                 {% else %}
-                  @{{ivar.id}}.to_kyaml(builder)
+                  @{{ ivar.id }}.to_kyaml(builder)
                 {% end %}
               end
             {% else %}
-              unless @{{ivar.id}}.nil?
-                builder.field({{key}}) do
+              unless @{{ ivar.id }}.nil?
+                builder.field({{ key }}) do
                   {% if ann && ann[:converter] %}
-                    {{ann[:converter]}}.to_kyaml(@{{ivar.id}}, builder)
+                    {{ ann[:converter] }}.to_kyaml(@{{ ivar.id }}, builder)
                   {% else %}
-                    @{{ivar.id}}.to_kyaml(builder)
+                    @{{ ivar.id }}.to_kyaml(builder)
                   {% end %}
                 end
               end
@@ -219,30 +219,30 @@ module KYAML
       def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
         node_mapping = node.as?(YAML::Nodes::Mapping)
         if node_mapping.nil?
-          raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{@type}}")
+          raise KYAML::ParseError.new("expected a KYAML mapping to deserialize {{ @type }}")
         end
 
         discriminator = nil
         node_mapping.each do |k_node, v_node|
           next unless k_node.is_a?(YAML::Nodes::Scalar)
-          next unless k_node.value == {{field.id.stringify}}
+          next unless k_node.value == {{ field.id.stringify }}
           unless v_node.is_a?(YAML::Nodes::Scalar)
-            raise KYAML::ParseError.new("KYAML discriminator field {{field.id}} must be a scalar")
+            raise KYAML::ParseError.new("KYAML discriminator field {{ field.id }} must be a scalar")
           end
           discriminator = v_node.value
           break
         end
 
         if discriminator.nil?
-          raise KYAML::ParseError.new("missing KYAML discriminator field {{field.id}}")
+          raise KYAML::ParseError.new("missing KYAML discriminator field {{ field.id }}")
         end
 
         case discriminator
         {% for k, v in mapping %}
-          when {{k.id.stringify}} then {{v.id}}.new(ctx, node)
+          when {{ k.id.stringify }} then {{ v.id }}.new(ctx, node)
         {% end %}
         else
-          raise KYAML::ParseError.new("unknown KYAML discriminator value '#{discriminator}' for {{field.id}}")
+          raise KYAML::ParseError.new("unknown KYAML discriminator value '#{discriminator}' for {{ field.id }}")
         end
       end
     end

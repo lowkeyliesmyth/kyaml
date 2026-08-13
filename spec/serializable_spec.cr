@@ -45,19 +45,19 @@ describe "KYAML::Serializable (to_kyaml)" do
 
   it "nests structs and collections in declared order" do
     kyaml = <<-KYAML
-    {
-      full_name: "Ada",
-      age: 36,
-      tags: [
-        "a",
-        "b",
-      ],
-      home: {
-        x: 1,
-        y: 2,
-      },
-    }
-    KYAML
+      {
+        full_name: "Ada",
+        age: 36,
+        tags: [
+          "a",
+          "b",
+        ],
+        home: {
+          x: 1,
+          y: 2,
+        },
+      }
+      KYAML
     acct = Account.new("Ada", 36, ["a", "b"], Point.new(1, 2))
     acct.to_kyaml.should eq(kyaml)
   end

@@ -36,7 +36,7 @@ describe "KYAML" do
         baz:
           - 1
           - 2
-      YAML
+        YAML
       any = KYAML.parse(yaml)
       any["foo"].as_s.should eq("bar")
       any["baz"][0].as_i.should eq(1)
@@ -60,9 +60,9 @@ describe "KYAML" do
 
     it "silently resolves anchor/alias pairs in lenient mode" do
       yaml = <<-YAML
-      - &id 42
-      - *id
-      YAML
+        - &id 42
+        - *id
+        YAML
       any = KYAML.parse(yaml)
       any[0].as_i.should eq(42)
       any[1].as_i.should eq(42)
@@ -97,7 +97,7 @@ describe "KYAML" do
         yaml = <<-YAML
           - 1
           - 2
-        YAML
+          YAML
         expect_raises(KYAML::BlockStyleError, /Block-style sequence/) do
           KYAML.parse(yaml, strict: true)
         end
@@ -111,7 +111,7 @@ describe "KYAML" do
             - b
           nested:
             n: 1
-        YAML
+          YAML
         expect_raises(KYAML::BlockStyleError, /Block-style mapping/) do
           KYAML.parse(yaml, strict: true)
         end
