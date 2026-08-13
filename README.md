@@ -63,7 +63,7 @@ Run `shards install`
 
 ### Parsing
 
-`KYAML.parse` returns a `KYAML::Any` you can traverse, directly mirroring `YAML::Any`
+`KYAML.parse` returns a `KYAML::Any` you can traverse, directly mirroring `YAML::Any`. Unsupported `Time` and `Bytes` types are coerced into strings, and `Set`into a mapping with null values.
 
 ```crystal
 require "kyaml"
@@ -71,7 +71,7 @@ require "kyaml"
 doc = KYAML.parse(<<-KYAML)
   {
       name: "foo",
-      port: 8080
+      port: 8080,
       tags: ["web", "api"]
   }
   KYAML
@@ -83,12 +83,12 @@ doc["tags"][0].as_s # => "web"
 
 ### Emitting
 
-`KYAML.emit` renders any standard basic Crystal value (scalars, `Array`, `Hash`, `KYAML::Any`) as KYAML. `#to_kyaml` is the same on any object:
+`KYAML.emit` renders any standard basic Crystal value (scalars, `Array`, `Hash`, `KYAML::Any`) as KYAML. `#to_kyaml` is the same on any basic value, and on any type including `KYAML::Serializable`:
 
 ```crystal
 {"name" => "foo", "ports" => [80, 443]}.to_kyaml
 # {
-#   name: "svc",
+#   name: "foo",
 #   ports: [
 #     80,
 #     443,
@@ -114,7 +114,11 @@ svc = Service.from_kyaml(%({ apiVersion: "v1", name: "foo"}))
 
 svc.api_version # => "v1"
 svc.name # => "foo"
-svc.to_kyaml # => { apiVersion: "v1", name: "foo", port: 80, }
+svc.to_kyaml # => {
+             #      apiVersion: "v1",
+             #      name: "foo",
+             #      port: 80,
+             #    }
 ```
 
 Supported field annotations:
@@ -179,15 +183,31 @@ end
 
 ### Strict-mode input validation
 
-Parsing accepts any valid YAML input by default. Pass in `strict: true` to reject non-conforming KYAML constructs (eg block-style, anchors, aliases, explicit tags) with a `KYAML::StrictError`.
+By default parsing runs in lenient mode so any valid YAML is accepted, including block-style. This lets you read existing YAML and convert it at emit time to KYAML.
+
+Pass in `strict: true` to reject non-conforming KYAML constructs (eg block-style, anchors, aliases, explicit tags) with a `KYAML::StrictError`.
 
 ```crystal
 KYAML.parse(input, strict: true)
 ```
 
+One rule is enforced across both strict and lenient modes though: any mapping key that is a non-scalar type will raise `KYAML::NonStringKeyError`.
+
 ### Output
 
-String output is ASCII safe. Printable ASCII is emitted literally, both common whitespace and structural characters (`\"`, `\\`, `\n`, `\t`) and other non-ASCII Unicode (`\uXXXX` for the BMP, `\UXXXXXXXX` for ASTRAL PLANE!).
+String output is ASCII safe. Printable ASCII is emitted literally, except for `"` and `\`, which are escaped. Common whitespace uses named escapes (`\n`, `\r`, `\t`). 
+Everything else, both ASCII control characters and non-ASCII Unicode, is rendered as `\uXXXX` for the BMP and `\UXXXXXXXX` for ASTRAL PLANE!
+
+
+```crystal
+KYAML.emit({"desc" => "line one\nline two\n  indented"})
+# {
+#   desc: "\
+#     line one\n\
+#     line two\n\
+#     \u0020 indented",
+# }
+```
 
 ## Development
 
@@ -211,7 +231,7 @@ crystal spec spec/any_spec.cr
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
-5. Create a new Pull Request with a descriptionfollowing [Conventional Commits](https://www.conventionalcommits.org/).
+5. Create a new Pull Request with a description following [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## License
 
