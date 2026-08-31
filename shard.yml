@@ -7,10 +7,7 @@ description: |
 development_dependencies:
   ameba:
     github: crystal-ameba/ameba
-    # version: ~> 1.7.0-dev
-    # version: ~> 1.6.4
-    # Head of master on 8/7/26
-    commit: f22db143abd884b4e08c2fcd91d99cf187fb56d1
+    version: ~> 1.7.0
 
 authors:
   - lowkey <lowkey@kaffeinlabs.com>

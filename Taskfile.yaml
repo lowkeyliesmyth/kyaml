@@ -29,9 +29,15 @@ tasks:
       - scripts/coverage.sh
 
   actionlint:
-    desc: Lint GitHub Actions workflows
+    desc: Analyze GitHub Actions workflows
     cmds:
-      - actionlint
+      #- actionlint
+      - zizmor .
+
+  actionlint:fix:
+    desc: Analyze and fix GHA workflows
+    cmds:
+      - zizmor . --fix=all
 
   docs:
     desc: Generates API usage docs from inline docstrings
