@@ -2,10 +2,30 @@
 version: "3"
 
 tasks:
-  spec:
-    desc: Run Crystal specs
+  actionlint:
+    desc: Analyze GitHub Actions workflows
     cmds:
-      - crystal spec --order random
+      #- actionlint
+      - zizmor .
+
+  actionlint:fix:
+    desc: Analyze and fix GHA workflows
+    cmds:
+      - zizmor . --fix=all
+
+  coverage:
+    desc: Run code coverage
+    cmds:
+      - scripts/coverage.sh
+
+  default:
+    desc: Run default spec-lint checks
+    deps: [spec, lint]
+
+  docs:
+    desc: Generates API usage docs from inline docstrings
+    cmds:
+      - crystal docs
 
   lint:
     desc: Run Ameba linter
@@ -23,27 +43,13 @@ tasks:
       - test -x bin/ameba
       - test bin/ameba -nt shard.lock
 
-  coverage:
-    desc: Run code coverage
+  lint:fix:
+    desc: Address fixable linter violations
+    deps: [lint:build]
     cmds:
-      - scripts/coverage.sh
+      - bin/ameba --fix
 
-  actionlint:
-    desc: Analyze GitHub Actions workflows
+  spec:
+    desc: Run Crystal specs
     cmds:
-      #- actionlint
-      - zizmor .
-
-  actionlint:fix:
-    desc: Analyze and fix GHA workflows
-    cmds:
-      - zizmor . --fix=all
-
-  docs:
-    desc: Generates API usage docs from inline docstrings
-    cmds:
-      - crystal docs
-
-  default:
-    desc: Run default spec-lint checks
-    deps: [spec, lint]
+      - crystal spec --order random
