@@ -1,0 +1,5 @@
+target:
+  old: 1
+keep: true
+target:
+  new: 2

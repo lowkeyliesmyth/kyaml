@@ -1,0 +1,7 @@
+target:
+  # discarded subtree
+  old: 1
+keep: true
+target:
+  # winning subtree
+  new: 2

@@ -2,8 +2,7 @@ require "json"
 require "yaml"
 require "./error"
 
-# KYAML::Any is a wrapper around all possible KYAML value types
-# and can be used for traversing dynamic or unknown KYAML/YAML structures.
+# KYAML::Any is a wrapper around all possible KYAML value types and can be used for traversing dynamic or unknown KYAML/YAML structures.
 # Mirrors the `YAML::Any` interface for familiarity.
 #
 # See https://github.com/crystal-lang/crystal/blob/master/src/yaml/any.cr
