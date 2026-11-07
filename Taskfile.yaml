@@ -53,3 +53,20 @@ tasks:
     desc: Run Crystal specs
     cmds:
       - crystal spec --order random
+
+  bench:baseline:
+    desc: Validate workloads and run a baseline benchmark
+    deps: [lint, spec]
+    cmds:
+      - mkdir -p bin bench/results
+      - crystal build bench/baseline.cr --release -o bin/kyaml-baseline
+      - |
+        set -eu
+        {
+        date -u
+        git log -1 --format="source-revision=%H"
+        sysctl -n machdep.cpu.brand_string
+        shasum -a 256 bench/baseline.cr bench/workloads.cr bench/workloads/small.yaml bench/workloads/deployment.yaml
+        bin/kyaml-baseline
+        } > bench/results/baseline.txt
+        cat bench/results/baseline.txt

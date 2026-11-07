@@ -1,0 +1,5 @@
+---
+# service identity
+name: demo
+replicas: 2 # desired count
+enabled: true

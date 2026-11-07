@@ -1,0 +1,30 @@
+Sat Nov  7 20:30:28 UTC 2026
+source-revision=dcd4cbf1be76d8a15a0396ade9605db352436ec5
+Apple M4
+34763dfc6b7cee9534d64458c2321e28d3234c2c5c6c49e227d0d419306235c1  bench/baseline.cr
+2586568c1d27cc96bb963d6c4e812d27caf955c5636b21d102f3a3cee68b9b51  bench/workloads.cr
+8bf2848cb87415d53ec51bcfda4c36895ca5aaf7c3d68b17e59ede32c6583d95  bench/workloads/small.yaml
+f8bc2e09b8794b766586d95ad46070794737b8a349cb286c1f4ac22b04442b6d  bench/workloads/deployment.yaml
+===DETAILS===
+crystal_version=1.21.1
+build_flags=--release
+warmup_seconds_per_operation=1.0
+calculation_seconds_per_operation=3.0
+small_input_bytes=76
+deployment_input_bytes=1450
+stream_input_bytes=145000
+stream_doc_count=100
+deployment_comment_count=3
+
+
+===RESULTS===
+               parse_doc small 480.33k (  2.08µs) (± 0.74%)   3.0kB/op     1703.53× slower
+          parse_doc deployment  36.38k ( 27.49µs) (± 1.02%)  26.0kB/op    22492.39× slower
+parse_all_docs 100 deployments 366.65  (  2.73ms) (± 0.69%)  2.46MB/op  2231739.64× slower
+           emit_doc deployment  95.56k ( 10.46µs) (± 0.66%)  15.6kB/op     8562.36× slower
+                root live read 818.26M (  1.22ns) (± 1.73%)    0.0B/op             fastest
+            comments live read 795.21M (  1.26ns) (± 1.63%)    0.0B/op        1.03× slower
+     Any#dup shallow root copy  31.26M ( 31.99ns) (± 1.77%)    208B/op       26.18× slower
+     Any#clone deep value copy 667.08k (  1.50µs) (± 0.71%)  5.13kB/op     1226.63× slower
+            comments Array#dup  48.09M ( 20.79ns) (± 0.67%)   96.0B/op       17.01× slower
+result_checks=passed
