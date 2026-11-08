@@ -1,0 +1,59 @@
+---
+# benchmark deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-api
+  namespace: workloads
+  labels:
+    app: benchmark-api
+spec:
+  replicas: 3 # steady-state capacity
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: benchmark-api
+  template:
+    metadata:
+      labels:
+        app: benchmark-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: benchmark-api
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: example.invalid/benchmark-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          # application listener
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: FEATURE_ENABLED
+              value: "false"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/benchmark
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: benchmark-api

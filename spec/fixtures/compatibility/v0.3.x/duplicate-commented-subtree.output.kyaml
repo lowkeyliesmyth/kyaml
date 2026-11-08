@@ -1,0 +1,8 @@
+---
+{
+  target: {
+    # discarded subtree
+    new: 2,
+  },
+  keep: true,
+}

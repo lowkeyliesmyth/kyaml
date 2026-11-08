@@ -1,0 +1,7 @@
+---
+{
+  target: {
+    new: 2,
+  },
+  keep: true,
+}

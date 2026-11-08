@@ -1,0 +1,3 @@
+target: old # discarded
+keep: true # keep
+target: new # winning dupe

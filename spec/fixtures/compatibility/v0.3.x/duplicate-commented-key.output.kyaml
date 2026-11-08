@@ -1,0 +1,5 @@
+---
+{
+  target: "new", # discarded
+  keep: true, # keep
+}

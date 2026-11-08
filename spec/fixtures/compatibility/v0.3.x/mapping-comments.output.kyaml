@@ -1,0 +1,18 @@
+# service settings
+---
+{
+  # API version
+  apiVersion: "v1", # stable API
+  metadata: {
+    # service identity
+    name: "demo", # display name
+    labels: {
+      app: "demo",
+      # labels tail
+    },
+    # metadata tail
+  },
+  # next sibling
+  replicas: 2,
+  # mapping tail
+}
