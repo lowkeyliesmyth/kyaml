@@ -61,6 +61,17 @@
 
 - **gha-release**: true-up versions and create a release workflow (#8)
 
+## v0.3.2 (2026-11-13)
+
+### Tests
+
+- add 0.3.x current behavior compatibility fixtures and perf baseline (#10)
+
+### Build System
+
+- alphasort taskfile tasks and update pre-commit
+- **ameba**: update linter to officially released ameba 1.7.0
+
 ## v0.3.1 (2026-08-13)
 
 ### Refactor
