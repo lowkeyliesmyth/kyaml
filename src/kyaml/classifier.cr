@@ -18,6 +18,9 @@ require "./comment"
 module KYAML
   # Comments classified at emit time, ready for the emitter to consult.
   # Lookup tables are keyed by `YAML::Nodes::Node` object identity.
+  #
+  # No longer a supported interface.
+  # :nodoc:
   struct ClassifiedComments
     # header` is flat since a doc has at most one header position above its `---`
     getter header : Array(KYAML::Comment)
