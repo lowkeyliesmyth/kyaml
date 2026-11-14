@@ -190,9 +190,7 @@ module KYAML
   def self.emit_doc(doc : KYAML::Doc, io : IO) : Nil
     case state = doc.state
     when Owned::Tree
-      io << "---\n"
-      OwnedEmitter.new(io).emit(state.root)
-      io << '\n'
+      OwnedEmitter.new(io).emit_doc(state)
     when Doc::LegacyState
       comments = Classifier.classify(state.yaml_doc, state.comments)
       comments.header.each do |comment|

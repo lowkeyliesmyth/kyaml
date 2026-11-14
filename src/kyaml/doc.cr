@@ -101,7 +101,7 @@ module KYAML
     def comments : Array(KYAML::Comment)
       case state = @state
       when Owned::Tree
-        [] of KYAML::Comment
+        state.comments
       else
         state.comments.dup
       end
