@@ -29,7 +29,7 @@ module KYAML
 
   # Parses a multi-doc K/YAML stream, block variant. Yields each doc into a `KYAML::Any`.
   #
-  # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
+  # Each doc is validated independently and only owns its own comments.
   def self.parse_all(input : String | IO, *, strict : Bool = false, & : KYAML::Any ->) : Nil
     YAML::Nodes.parse_all(input).each do |doc|
       node = doc.nodes.first? || empty_scalar
@@ -53,9 +53,9 @@ module KYAML
     docs
   end
 
-  # Parses a single K/YAML doc, returning a tree+comments `KYAML::Doc`.
+  # Parses a single K/YAML doc, returning KYAML::Doc`.
   #
-  # This is the comment-preserving entrypoint, where the returned `Doc` holds both a parsed K/YAML doc tree and its sister sidecar comments.
+  # This is the comment-preserving entrypoint. The returned doc exposes its root and comments through detached snapshot copies.
   #
   # If you don't need comments then use `KYAML.parse` instead.
   #

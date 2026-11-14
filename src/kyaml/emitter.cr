@@ -10,10 +10,16 @@ require "yaml"
 module KYAML
   # Renders KYAML values (`KYAML::Any::Type` union) as KYAML spec-compliant text.
   class Emitter
+    # Creates an emitter writing to **io**.
+    #
+    # The optional classified-comment arg  is an internal detail that will be removed shortly.
     def initialize(@io : IO, @comments : ClassifiedComments = ClassifiedComments.new)
       @indent = 0
     end
 
+    # Emit **value** as bare KYAML.
+    #
+    # The optional source-node arg is an internal detail that will be removed shortly.
     def emit(value : KYAML::Any::Type, source : YAML::Nodes::Node? = nil) : Nil
       case value
       in Nil                      then Scalar.write(@io, value, @indent)
@@ -201,17 +207,17 @@ module KYAML
     end
   end
 
-  # Emits *doc* as a complete KYAML document and returns it as a `String`.
+  # Emit **doc** as a complete KYAML document and returns it as a `String`.
   def self.emit_doc(doc : KYAML::Doc) : String
     String.build { |io| emit_doc(doc, io) }
   end
 
-  # Emits each `KYAML::Doc` in *docs* as a complete KYAML document to *io*.
+  # Emit each `KYAML::Doc` in **docs** as a complete KYAML document to **io**.
   def self.emit_all_docs(docs : Enumerable(KYAML::Doc), io : IO) : Nil
     docs.each { |doc| emit_doc(doc, io) }
   end
 
-  # Emits all `KYAML::Doc` in *docs* as a complete KYAML document and returns it as a `String`.
+  # Emits all `KYAML::Doc` in **docs** as a complete KYAML document and returns it as a `String`.
   def self.emit_all_docs(docs : Enumerable(KYAML::Doc)) : String
     String.build { |io| emit_all_docs(docs, io) }
   end

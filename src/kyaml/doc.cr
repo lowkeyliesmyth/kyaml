@@ -8,6 +8,7 @@ require "./source_clone"
 module KYAML
   # A kyaml doc that owns its values, comments, and source information.
   # Assignment shares the doc, reads return detached snapshots, and `#clone` creates an isolated copy.
+  # Assignment and argument passing share this instance. Equality and hashing use reference identity.
   class Doc
     # Temp storage for parsed docs and non-editable handbuilt docs.
     # :nodoc:
@@ -83,7 +84,8 @@ module KYAML
       @state
     end
 
-    # Return a detached root snapshot with isolated nested containers.
+    # Getter returns a detached root snapshot with isolated nested containers.
+    # Each call returns a new isolated snapshot whose mutation can't affect this doc or another snapshot.
     def root : KYAML::Any
       case state = @state
       when Owned::Tree
@@ -93,8 +95,9 @@ module KYAML
       end
     end
 
-    # Return an isolated comment array.
+    # Getter returns a new isolated comment array in emission order.
     # Legacy docs keep source order.
+    # Each call returns a new isolated snapshot whose mutation can't affect this doc or another snapshot.
     def comments : Array(KYAML::Comment)
       case state = @state
       when Owned::Tree
@@ -104,8 +107,7 @@ module KYAML
       end
     end
 
-    # Return an isolated doc preserving the values, order, comments, coordinates, and classification.
-    # YAML source graphs are isolated copies, including alias relationships.
+    # Return an isolated doc preserving the values, order, comments, coordinates, and classification. No mutable state is shared with this doc.
     def clone : Doc
       Doc.new(@state.clone)
     end

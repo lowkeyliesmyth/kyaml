@@ -56,4 +56,85 @@ describe "KYAML Public API - object emission" do
       parsed["on"].should be_true
     end
   end
+
+  describe "retained stream and emitter interfaces" do
+    it "parses IO streams through both versions of #parse_all" do
+      input = "---\nfoo: 1\n---\nbar: 2\n"
+
+      docs = KYAML.parse_all(IO::Memory.new(input))
+      docs.size.should eq(2)
+      docs[0]["foo"].should eq(1)
+      docs[1]["bar"].should eq(2)
+
+      yielded = [] of KYAML::Any
+      KYAML.parse_all(IO::Memory.new(input)) { |doc| yielded << doc }
+
+      yielded.should eq(docs)
+    end
+
+    it "parses values and comments through both IO versions of #parse_all_docs" do
+      input = "# header\n---\nfoo: 1 # trailing\n---\nbar: 2\n"
+
+      docs = KYAML.parse_all_docs(IO::Memory.new(input))
+      docs.size.should eq(2)
+      docs[0].root["foo"].as_i.should eq(1)
+      docs[1].root["bar"].as_i.should eq(2)
+      docs[0].comments.map(&.text).should eq([" header", " trailing"])
+      docs[1].comments.should be_empty
+    end
+
+    it "empty IO streams return and yields nothing" do
+      KYAML.parse_all(IO::Memory.new("")).should be_empty
+      KYAML.parse_all_docs(IO::Memory.new("")).should be_empty
+
+      yielded_values = 0
+      KYAML.parse_all(IO::Memory.new("")) { |_| yielded_values += 1 }
+      yielded_values.should eq(0)
+
+      yielded_docs = 0
+      KYAML.parse_all_docs(IO::Memory.new("")) { |_| yielded_docs += 1 }
+      yielded_docs.should eq(0)
+    end
+
+    it "rejects malformed IO through both versions of both stream parsers" do
+      malformed = "{unclosed:"
+
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_all(IO::Memory.new(malformed))
+      end
+
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_all(IO::Memory.new(malformed)) { |_| }
+      end
+
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_all_docs(IO::Memory.new(malformed))
+      end
+
+      expect_raises(KYAML::ParseError) do
+        KYAML.parse_all_docs(IO::Memory.new(malformed)) { |_| }
+      end
+    end
+
+    it "emits multiple docs through the IO version" do
+      docs = [
+        KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment),
+        KYAML::Doc.new(KYAML::Any.new(2), [] of KYAML::Comment),
+      ]
+      io = IO::Memory.new
+
+      KYAML.emit_all_docs(docs, io)
+
+      io.to_s.should eq("---\n1\n---\n2\n")
+    end
+
+    it "retains direct bare-value emission functionality through Emitter" do
+      io = IO::Memory.new
+      value = KYAML.parse(%({"a": 1})).raw
+
+      KYAML::Emitter.new(io).emit(value)
+
+      io.to_s.should eq("{\n  a: 1,\n}")
+    end
+  end
 end
