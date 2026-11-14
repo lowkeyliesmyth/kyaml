@@ -384,7 +384,7 @@ struct KYAML::Any
     KYAML::Any.new(raw.dup)
   end
 
-  # Returns a new KYAML::Any instance with the `raw` value `clone`ed
+  # Return a new KYAML::Any instance with the `raw` value deep-copied.
   def clone
     KYAML::Any.new(raw.clone)
   end

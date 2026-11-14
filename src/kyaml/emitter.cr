@@ -1,5 +1,7 @@
 require "./any"
 require "./comment"
+require "./doc"
+require "./owned_emitter"
 require "./error"
 require "./classifier"
 require "./scalar"
@@ -24,7 +26,7 @@ module KYAML
       end
     end
 
-    # Emits sequence with formatted indentation to `Emitter.io`
+    # Emit **array** to `Emitter.io` with formatted indentation, preserving comments when provided from **source**.
     private def emit_sequence(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
       if array.empty?
         @io << "[]"
@@ -73,9 +75,9 @@ module KYAML
       @io << ']'
     end
 
-    # Returns true if *array* elements should be cuddled together on the same line.
+    # Assess if **array** elements from the **source** node should be cuddled together on the same line. Elements can't be cuddled if source subtree has any comments.
     #
-    # Otherwise returns false.
+    # Return true if they should be cuddled, otherwise returns false.
     private def cuddleable?(array : Array(KYAML::Any), source : YAML::Nodes::Node? = nil) : Bool
       # A sequence whose source subtree has any comment cannot be collapsed
       return false if source && @comments.commented.includes?(source)
@@ -131,12 +133,12 @@ module KYAML
       end
     end
 
-    # Writes the current indentation level to `Emitter.io` as two-space indents.
+    # Write the current indentation level to `Emitter.io` as two-space indents.
     private def write_indent : Nil
       @indent.times { @io << "  " }
     end
 
-    # Emits mapping with formatted indentation to `Emitter.io`
+    # Emit **hash** as an indented mapping to `Emitter.io`, preserving comments when provided from **source**.
     private def emit_mapping(hash : Hash(String, KYAML::Any), source : YAML::Nodes::Node? = nil) : Nil
       if hash.empty?
         @io << "{}"
@@ -178,16 +180,25 @@ module KYAML
     String.build { |io| emit(value, io) }
   end
 
-  # Emits *doc* as a complete KYAML document to *io*, including any preserved comments.
+  # Emit **doc** containing any perserved comments as a complete KYAML document to **IO**.
   def self.emit_doc(doc : KYAML::Doc, io : IO) : Nil
-    comments = Classifier.classify(doc.yaml_doc, doc.comments)
-    comments.header.each do |cmt|
-      io << '#' << cmt.text << '\n'
+    case state = doc.state
+    when Owned::Tree
+      io << "---\n"
+      OwnedEmitter.new(io).emit(state.root)
+      io << '\n'
+    when Doc::LegacyState
+      comments = Classifier.classify(state.yaml_doc, state.comments)
+      comments.header.each do |comment|
+        io << '#' << comment.text << '\n'
+      end
+      io << "---\n"
+      root_source = state.yaml_doc.try &.nodes.first?
+      Emitter.new(io, comments).emit(state.root.raw, root_source)
+      io << '\n'
+    else
+      raise ArgumentError.new("Unsupported document state")
     end
-    io << "---\n"
-    root_source = doc.yaml_doc.try &.nodes.first?
-    Emitter.new(io, comments).emit(doc.root.raw, root_source)
-    io << '\n'
   end
 
   # Emits *doc* as a complete KYAML document and returns it as a `String`.

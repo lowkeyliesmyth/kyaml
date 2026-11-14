@@ -2,6 +2,7 @@ require "yaml"
 require "./any"
 require "./comment"
 require "./comment_scanner"
+require "./doc"
 require "./error"
 require "./validator"
 
@@ -65,7 +66,7 @@ module KYAML
     node = yaml_doc.nodes.first? || empty_scalar
     Validator.validate(node, strict)
     root = KYAML::Any.new(YAML::ParseContext.new, node)
-    KYAML::Doc.new(root, KYAML::CommentScanner.scan(text), yaml_doc)
+    KYAML::Doc.from_parsed(root, KYAML::CommentScanner.scan(text), yaml_doc)
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(
       ex.message || "YAML parse error",
@@ -101,7 +102,7 @@ module KYAML
       node = yaml_doc.nodes.first? || empty_scalar
       Validator.validate(node, strict)
       root = KYAML::Any.new(YAML::ParseContext.new, node)
-      yield KYAML::Doc.new(root, doc_buckets[i], yaml_doc)
+      yield KYAML::Doc.from_parsed(root, doc_buckets[i], yaml_doc)
     end
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(
