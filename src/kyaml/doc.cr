@@ -2,6 +2,7 @@ require "yaml"
 require "./any"
 require "./comment"
 require "./error"
+require "./importer"
 require "./owned"
 require "./source_clone"
 
@@ -70,13 +71,20 @@ module KYAML
     protected def initialize(@state : Owned::Tree | LegacyState)
     end
 
-    # Build a doc from parsed values in **root**, parsed **comments**, and the YAML source document **yaml_doc** to preserve source info.
+    # Build a new doc from a supported "ordinary" source **yaml_doc**, **comments**, and **root**, importing them into an owned, editable tree.
+    #
+    # Fallback to non-editable doc if import isn't supported.
+    # :nodoc:
     protected def self.from_parsed(
       root : KYAML::Any,
       comments : Array(KYAML::Comment),
       yaml_doc : YAML::Nodes::Document,
     ) : Doc
-      new(LegacyState.new(root, comments, yaml_doc))
+      if tree = Importer.import(root, comments, yaml_doc)
+        new(tree)
+      else
+        new(LegacyState.new(root, comments, yaml_doc))
+      end
     end
 
     # :nodoc:
