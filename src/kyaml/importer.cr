@@ -5,7 +5,7 @@ require "./comment"
 require "./owned"
 
 module KYAML
-  # Import ordinary docs, docs with header comments or same-line comments after a key but before nested collections.
+  # Import ordinary docs, docs with header comments, or comments between keys and nested collections.
   # :nodoc:
   module Importer
     extend self
@@ -47,7 +47,7 @@ module KYAML
       Owned::Tree.new(tree.root, header: header)
     end
 
-    # Return true when **comment** comes before the **root* and source **yaml_doc** doc header.
+    # Return true when **comment** comes before the **root** and source **yaml_doc** doc header.
     private def header_comment?(
       comment : KYAML::Comment,
       root : YAML::Nodes::Node,
@@ -56,7 +56,7 @@ module KYAML
       comment.line < root.start_line && comment.line < yaml_doc.start_line
     end
 
-    # Find the same-line key **comment** before a nested mapping or sequence node in **source**.
+    # Find the key owning **comment** between that key and its nested mapping or sequence node in **source**.
     private def trailing_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -66,11 +66,11 @@ module KYAML
       when YAML::Nodes::Mapping
         source.each do |k, v|
           if v.is_a?(YAML::Nodes::Mapping) || v.is_a?(YAML::Nodes::Sequence)
-            if comment.line == k.end_line &&
-               comment.column > k.end_column &&
-               v.start_line > k.end_line
-              return {k, under_sequence}
-            end
+            same_line = comment.line == k.end_line &&
+                        comment.column > k.end_column &&
+                        v.start_line > k.end_line
+            in_gap = k.end_line < comment.line && comment.line < v.start_line
+            return {k, under_sequence} if same_line || in_gap
           end
 
           found = trailing_key_for(comment, v, under_sequence)

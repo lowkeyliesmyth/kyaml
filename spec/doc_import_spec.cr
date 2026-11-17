@@ -2,8 +2,21 @@ require "./spec_helper"
 
 describe "ordinary parsed doc import" do
   it "moves a same-line key comment to above its owning mapping entry on import" do
-    doc = KYAML.parse_doc("a: # why\n  b: 1\n")
-    expected = "---\n{\n  # why\n  a: {\n    b: 1,\n  },\n}\n"
+    doc = KYAML.parse_doc(<<-YAML)
+      a: # why
+        b: 1
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # why
+        a: {
+          b: 1,
+        },
+      }
+
+      KYAML
     comments = [KYAML::Comment.new(" why", 1, 4)]
 
     doc.comments.should eq(comments)
@@ -74,57 +87,338 @@ describe "ordinary parsed doc import" do
   end
 
   it "preserves header only scalar roots and empty docs" do
-    scalar = KYAML.parse_doc("# header\n---\n42\n")
+    scalar = KYAML.parse_doc(<<-YAML)
+      # header
+      ---
+      42
+
+      YAML
 
     scalar.root.as_i.should eq(42)
     scalar.comments.should eq([(KYAML::Comment.new(" header", 1, 1))])
-    scalar.to_kyaml.should eq("# header\n---\n42\n")
+    scalar.to_kyaml.should eq(<<-KYAML)
+      # header
+      ---
+      42
 
-    empty = KYAML.parse_doc("")
+      KYAML
+
+    empty = KYAML.parse_doc(<<-YAML)
+      YAML
     empty.root.raw.should be_nil
     empty.comments.should be_empty
-    empty.to_kyaml.should eq("---\nnull\n")
+    empty.to_kyaml.should eq(<<-KYAML)
+      ---
+      null
+
+      KYAML
   end
 
   it "falls back to legacy uneditable behavior when there are unhandled comments" do
-    doc = KYAML.parse_doc("a: # why\n b: 1\n# tail\n")
+    doc = KYAML.parse_doc(<<-YAML)
+      a: # why
+       b: 1
+      # tail
+
+      YAML
 
     doc.comments.map(&.text).should eq([" why", " tail"])
-    doc.to_kyaml.should eq("---\n{\n  a: {\n    b: 1,\n  },\n  # tail\n}\n")
+    doc.to_kyaml.should eq(<<-KYAML)
+      ---
+      {
+        a: {
+          b: 1,
+        },
+        # tail
+      }
+
+      KYAML
   end
 
-  it "temporarily falls back to legacy placement for standalone gaps and entries underneath sequences" do
-    gap = KYAML.parse_doc("a:\n  # gap\n  b: 1\n")
+  it "moves a standalone gap comment to above its entry and keeps snapshots stable" do
+    doc = KYAML.parse_doc(<<-YAML)
+      a:
+        # gap
+       b: 1
 
-    gap.comments.should eq([KYAML::Comment.new(" gap", 2, 3)])
-    gap.to_kyaml.should eq("---\n{\n  a: {\n    # gap\n    b: 1,\n  },\n}\n")
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        a: {
+          b: 1,
+        },
+      }
 
-    sequence = KYAML.parse_doc("- a: # why\n    b: 1\n")
-    sequence.comments.map(&.text).should eq([" why"])
-    sequence.to_kyaml.should eq("---\n[\n  {\n    a: {\n      b: 1,\n    },\n  },\n]\n")
+      KYAML
+    comments = [KYAML::Comment.new(" gap", 2, 3)]
+
+    doc.comments.should eq(comments)
+    doc.root["a"]["b"].as_i.should eq(1)
+
+    3.times do
+      doc.to_kyaml.should eq(expected)
+      doc.comments.should eq(comments)
+    end
+
+    copy = doc.clone
+    copy.comments.should eq(comments)
+    copy.to_kyaml.should eq(expected)
+
+    root_snapshot = doc.root
+    root_snapshot["a"].as_h["b"] = KYAML::Any.new(2)
+    comment_snapshot = doc.comments
+    comment_snapshot.clear
+
+    doc.root["a"]["b"].as_i.should eq(1)
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "keeps inline and stacked gap comments in order before a nested sequence" do
+    doc = KYAML.parse_doc(<<-YAML)
+      items: # inline
+
+        # first
+        # second
+        - 1
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # inline
+        # first
+        # second
+        items: [
+          1,
+        ],
+      }
+
+      KYAML
+
+    comments = [
+      KYAML::Comment.new(" inline", 1, 8),
+      KYAML::Comment.new(" first", 3, 3),
+      KYAML::Comment.new(" second", 4, 3),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "keeps gap comments above entries with empty collection values" do
+    doc = KYAML.parse_doc(<<-YAML)
+      a:
+        # empty map
+        {}
+      b:
+        # empty seq
+        []
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # empty map
+        a: {},
+        # empty seq
+        b: [],
+      }
+
+      KYAML
+    comments = [
+      KYAML::Comment.new(" empty map", 2, 3),
+      KYAML::Comment.new(" empty seq", 5, 3),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "treats a comment after an opening flow bracket as a child-owned comment" do
+    doc = KYAML.parse_doc(<<-YAML)
+      a:
+        { # inside
+          b: 1,
+        }
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        a: {
+          # inside
+          b: 1,
+        },
+      }
+
+      KYAML
+
+    doc.comments.should eq([KYAML::Comment.new(" inside", 2, 5)])
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "treats the whole doc as legacy when a supported gap is paired with an unhandled tail" do
+    doc = KYAML.parse_doc(<<-YAML)
+      a:
+        # gap
+        b: 1
+      # tail
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        a: {
+          # gap
+          b: 1,
+        },
+        # tail
+      }
+
+      KYAML
+    comments = [
+      KYAML::Comment.new(" gap", 2, 3),
+      KYAML::Comment.new(" tail", 4, 1),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "defers inline and gap comments under sequence ancestors" do
+    inline = KYAML.parse_doc(<<-YAML)
+      - a: # why
+          b: 1
+      YAML
+    inline_expected = <<-KYAML
+      ---
+      [
+        {
+          a: {
+            b: 1,
+          },
+        },
+      ]
+
+      KYAML
+
+    inline.comments.should eq([KYAML::Comment.new(" why", 1, 6)])
+    inline.to_kyaml.should eq(inline_expected)
+
+    gap = KYAML.parse_doc(<<-YAML)
+      - a:
+          # gap
+          b: 1
+      YAML
+    gap_expected = <<-KYAML
+      ---
+      [
+        {
+          a: {
+            # gap
+            b: 1,
+          },
+        },
+      ]
+
+      KYAML
+
+    gap.comments.should eq([KYAML::Comment.new(" gap", 2, 5)])
+    gap.to_kyaml.should eq(gap_expected)
+    gap.clone.to_kyaml.should eq(gap_expected)
+    KYAML.parse(gap_expected).should eq(gap.root)
+  end
+
+  it "doesn't bypass the duped-key gate for a doc with a gap comment" do
+    doc = KYAML.parse_doc(<<-YAML)
+      a:
+        # gap
+        b: 1
+      a: 2
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        a: 2,
+      }
+
+      KYAML
+
+    doc.comments.should eq([KYAML::Comment.new(" gap", 2, 3)])
+    doc.root["a"].as_i.should eq(2)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
   end
 
   it "keeps legacy behavior for duplicated keys and comment-only docs" do
-    dupe = KYAML.parse_doc("a: # why\n b: 1\na: 2\n")
+    dupe = KYAML.parse_doc(<<-YAML)
+      a: # why
+       b: 1
+      a: 2
+
+      YAML
 
     dupe.comments.map(&.text).should eq([" why"])
-    dupe.to_kyaml.should eq("---\n{\n  a: 2,\n}\n")
+    dupe.to_kyaml.should eq(<<-KYAML)
+      ---
+      {
+        a: 2,
+      }
 
-    only = KYAML.parse_doc("# only\n")
+      KYAML
+
+    only = KYAML.parse_doc(<<-YAML)
+      # only
+
+      YAML
 
     only.comments.should eq([KYAML::Comment.new(" only", 1, 1)])
-    only.to_kyaml.should eq("---\nnull\n")
+    only.to_kyaml.should eq(<<-KYAML)
+      ---
+      null
+
+      KYAML
   end
 
   it "routes each doc in a stream to an owned- or legacy-state route independently" do
-    input = "---\na: # why\n  b: 1\n---\n42 # trailing\n"
+    input = <<-YAML
+      ---
+      a: # why
+        b: 1
+      ---
+      42 # trailing
+
+      YAML
     docs = KYAML.parse_all_docs(input)
     yielded = [] of KYAML::Doc
     KYAML.parse_all_docs(input) { |doc| yielded << doc }
 
     docs.size.should eq(2)
-    docs[0].to_kyaml.should eq("---\n{\n  # why\n  a: {\n    b: 1,\n  },\n}\n")
-    docs[1].to_kyaml.should eq("---\n42\n")
+    docs[0].to_kyaml.should eq(<<-KYAML)
+      ---
+      {
+        # why
+        a: {
+          b: 1,
+        },
+      }
+
+      KYAML
+    docs[1].to_kyaml.should eq(<<-KYAML)
+      ---
+      42
+
+      KYAML
     docs[1].comments.map(&.text).should eq([" trailing"])
 
     yielded.map(&.root).should eq(docs.map(&.root))
