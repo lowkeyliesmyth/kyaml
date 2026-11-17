@@ -295,32 +295,156 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "defers inline and gap comments under sequence ancestors" do
-    inline = KYAML.parse_doc(<<-YAML)
+  it "imports inline key comments under sequence ancestors" do
+    doc = KYAML.parse_doc(<<-YAML)
       - a: # why
           b: 1
       YAML
-    inline_expected = <<-KYAML
+    expected = <<-KYAML
+      ---
+      [{
+        # why
+        a: {
+          b: 1,
+        },
+      }]
+
+      KYAML
+
+    comments = [KYAML::Comment.new(" why", 1, 6)]
+
+    doc.comments.should eq(comments)
+    doc.root[0]["a"]["b"].as_i.should eq(1)
+
+    3.times do
+      doc.to_kyaml.should eq(expected)
+      doc.comments.should eq(comments)
+    end
+
+    copy = doc.clone
+    copy.comments.should eq(comments)
+    copy.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "imports gap comments beneath multiple sequence ancestors" do
+    doc = KYAML.parse_doc(<<-YAML)
+      - - x:
+            # deep
+            y: 1
+      YAML
+    expected = <<-KYAML
+      ---
+      [[{
+        # deep
+        x: {
+          y: 1,
+        },
+      }]]
+
+      KYAML
+
+    comments = [KYAML::Comment.new(" deep", 2, 7)]
+
+    doc.comments.should eq(comments)
+    doc.root[0][0]["x"]["y"].as_i.should eq(1)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.comments.should eq(comments)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "preserves stacked inline and gap comments under sequence ancestors" do
+    doc = KYAML.parse_doc(<<-YAML)
+      - a: # inline
+          # first
+          # second
+          b: 1
+      YAML
+    expected = <<-KYAML
+      ---
+      [{
+        # inline
+        # first
+        # second
+        a: {
+          b: 1,
+        },
+      }]
+
+      KYAML
+
+    comments = [
+      KYAML::Comment.new(" inline", 1, 6),
+      KYAML::Comment.new(" first", 2, 5),
+      KYAML::Comment.new(" second", 3, 5),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "keeps cuddling when an entry inside a sequence element owns a gap comment" do
+    doc = KYAML.parse_doc(<<-YAML)
+      - a:
+          # note
+          b: 1
+      - c: 2
+      YAML
+    expected = <<-KYAML
+      ---
+      [{
+        # note
+        a: {
+          b: 1,
+        },
+      }, {
+        c: 2,
+      }]
+
+      KYAML
+
+    doc.comments.should eq([KYAML::Comment.new(" note", 2, 5)])
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "keeps mixed scalar sequences uncuddled while importing entry comments" do
+    doc = KYAML.parse_doc(<<-YAML)
+      - a: # why
+          b: 1
+      - 2
+      YAML
+    expected = <<-KYAML
       ---
       [
         {
+          # why
           a: {
             b: 1,
           },
         },
+        2,
       ]
 
       KYAML
 
-    inline.comments.should eq([KYAML::Comment.new(" why", 1, 6)])
-    inline.to_kyaml.should eq(inline_expected)
+    doc.comments.should eq([KYAML::Comment.new(" why", 1, 6)])
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
 
-    gap = KYAML.parse_doc(<<-YAML)
+  it "keeps the doc as legacy when a direct sequence-element comment is unhandled" do
+    doc = KYAML.parse_doc(<<-YAML)
       - a:
           # gap
           b: 1
+      # direct
+      - c: 2
       YAML
-    gap_expected = <<-KYAML
+    expected = <<-KYAML
       ---
       [
         {
@@ -329,14 +453,24 @@ describe "ordinary parsed doc import" do
             b: 1,
           },
         },
+        # direct
+        {
+          c: 2,
+        },
       ]
 
       KYAML
 
-    gap.comments.should eq([KYAML::Comment.new(" gap", 2, 5)])
-    gap.to_kyaml.should eq(gap_expected)
-    gap.clone.to_kyaml.should eq(gap_expected)
-    KYAML.parse(gap_expected).should eq(gap.root)
+    comments = [
+      KYAML::Comment.new(" gap", 2, 5),
+      KYAML::Comment.new(" direct", 4, 1),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.comments.should eq(comments)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
   end
 
   it "doesn't bypass the duped-key gate for a doc with a gap comment" do

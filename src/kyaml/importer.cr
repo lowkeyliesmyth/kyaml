@@ -33,9 +33,7 @@ module KYAML
       comments.each do |comment|
         if header_comment?(comment, source, yaml_doc)
           header << comment
-        elsif found = trailing_key_for(comment, source)
-          key, under_sequence = found
-          return if under_sequence
+        elsif key = trailing_key_for(comment, source)
           (owners[key] ||= [] of KYAML::Comment) << comment
         else
           return
@@ -60,8 +58,7 @@ module KYAML
     private def trailing_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
-      under_sequence : Bool = false,
-    ) : Tuple(YAML::Nodes::Node, Bool)?
+    ) : YAML::Nodes::Node?
       case source
       when YAML::Nodes::Mapping
         source.each do |k, v|
@@ -70,15 +67,16 @@ module KYAML
                         comment.column > k.end_column &&
                         v.start_line > k.end_line
             in_gap = k.end_line < comment.line && comment.line < v.start_line
-            return {k, under_sequence} if same_line || in_gap
+
+            return k if same_line || in_gap
           end
 
-          found = trailing_key_for(comment, v, under_sequence)
+          found = trailing_key_for(comment, v)
           return found if found
         end
       when YAML::Nodes::Sequence
         source.nodes.each do |elem|
-          found = trailing_key_for(comment, elem, true)
+          found = trailing_key_for(comment, elem)
           return found if found
         end
       end
