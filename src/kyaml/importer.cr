@@ -5,13 +5,18 @@ require "./comment"
 require "./owned"
 
 module KYAML
-  # Import ordinary docs, docs with header comments, or comments between keys and nested collections.
+  # Import ordinary docs with header comments, comments between keys and values, or inline comments after entries.
   # :nodoc:
   module Importer
     extend self
 
-    alias CommentOwners = Hash(YAML::Nodes::Node, Array(KYAML::Comment))
     alias SourcePair = Tuple(YAML::Nodes::Scalar, YAML::Nodes::Node)
+
+    # Keep entry-leading and -trailing comments indexed by their source key
+    private class CommentOwners
+      getter leading = {} of YAML::Nodes::Node => Array(KYAML::Comment)
+      getter trailing = {} of YAML::Nodes::Node => Array(KYAML::Comment)
+    end
 
     # Build an owned tree with normalized **root** values, referencing **yaml_doc** for node structure to attach parsed **comments** to owner nodes.
     #
@@ -34,7 +39,9 @@ module KYAML
         if header_comment?(comment, source, yaml_doc)
           header << comment
         elsif key = trailing_key_for(comment, source)
-          (owners[key] ||= [] of KYAML::Comment) << comment
+          (owners.leading[key] ||= [] of KYAML::Comment) << comment
+        elsif key = trailing_value_key_for(comment, source)
+          (owners.trailing[key] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -81,6 +88,100 @@ module KYAML
         end
       end
       nil
+    end
+
+    # Find the key in the **source** node whose value ends before **comment** on the same line.
+    private def trailing_value_key_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Node?
+      return if flow_container_ends_before?(comment, source)
+
+      case source
+      when YAML::Nodes::Mapping
+        trailing_value_mapping_key_for(comment, source)
+      when YAML::Nodes::Sequence
+        trailing_value_sequence_key_for(comment, source)
+      end
+    end
+
+    # Find the key in **mapping** whose value ends before **comment** on the same line
+    private def trailing_value_mapping_key_for(
+      comment : KYAML::Comment,
+      mapping : YAML::Nodes::Mapping,
+    ) : YAML::Nodes::Node?
+      candidate : Tuple(YAML::Nodes::Node, YAML::Nodes::Node)? = nil
+      mapping.each do |k, v|
+        break unless key_starts_before?(k, comment)
+        candidate = {k, v}
+      end
+      return unless candidate
+
+      key, value = candidate
+      return key if value_ends_before?(comment, value)
+      trailing_value_key_for(comment, value) if container?(value)
+    end
+
+    # Search **sequence** elements looking for a trailing value key for **comment**. Skip non-container elements.
+    private def trailing_value_sequence_key_for(
+      comment : KYAML::Comment,
+      sequence : YAML::Nodes::Sequence,
+    ) : YAML::Nodes::Node?
+      sequence.nodes.each do |elem|
+        next unless container?(elem)
+
+        nested = trailing_value_key_for(comment, elem)
+        return nested if nested
+      end
+      nil
+    end
+
+    # Internal helper to check if a **node** is a mapping or sequence container type.
+    private def container?(node : YAML::Nodes::Node) : Bool
+      node.is_a?(YAML::Nodes::Mapping) || node.is_a?(YAML::Nodes::Sequence)
+    end
+
+    # Internal helper to check if a **key** comes before a **comment**.
+    private def key_starts_before?(key : YAML::Nodes::Node, comment : KYAML::Comment) : Bool
+      key.start_line < comment.line ||
+        (key.start_line == comment.line && key.start_column < comment.column)
+    end
+
+    # Check if a flow-style container **node** ends before a **comment**.
+    # Used for detecting trailing comments on flow container nodes.
+    private def flow_container_ends_before?(
+      comment : KYAML::Comment,
+      node : YAML::Nodes::Node,
+    ) : Bool
+      case node
+      when YAML::Nodes::Mapping
+        return false unless node.style.flow?
+      when YAML::Nodes::Sequence
+        return false unless node.style.flow?
+      else
+        return false
+      end
+
+      comment.line > node.end_line ||
+        (comment.line == node.end_line && comment.column > node.end_column)
+    end
+
+    # Checks whether the **value** nodes end position precedes **comment**, so the comment can be treated as trailing on the same line. Matches scalar tokens and flow-style containers.
+    private def value_ends_before?(comment : KYAML::Comment, value : YAML::Nodes::Node) : Bool
+      return false unless comment.line == value.end_line
+      return false unless comment.column > value.end_column
+
+      case value
+      when YAML::Nodes::Scalar
+        return false if value.style.plain? && value.value.empty?
+        value.style.plain? || value.style.single_quoted? || value.style.double_quoted?
+      when YAML::Nodes::Mapping
+        value.style.flow?
+      when YAML::Nodes::Sequence
+        value.style.flow?
+      else
+        false
+      end
     end
 
     # A **node** is "ordinary" when it has no duped keys, merge keys, anchors, or aliases.
@@ -157,7 +258,8 @@ module KYAML
       end
 
       mapping.entries.zip(pairs) do |entry, (k_node, v_node)|
-        owners[k_node]?.try { |comments| entry.leading.concat(comments) }
+        owners.leading[k_node]?.try { |comments| entry.leading.concat(comments) }
+        owners.trailing[k_node]?.try { |comments| entry.trailing.concat(comments) }
         attach(entry.value, v_node, owners)
       end
     end

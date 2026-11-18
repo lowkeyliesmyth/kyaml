@@ -23,7 +23,7 @@ describe KYAML::Doc do
     {
       name:  "parsed legacy",
       build: -> {
-        KYAML.parse_doc("items:\n- name: original # note\n")
+        KYAML.parse_doc("items:\n- name: original # note\n# tail")
       },
     },
   ]

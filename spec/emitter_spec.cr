@@ -476,19 +476,16 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "disables cuddling when a sequence element carries a comment" do
+    it "cuddles when a sole-entry inside a sequence element has a comment" do
       doc = KYAML.parse_doc("items:\n- foo: 1 # note\n- foo: 2\n")
       expected = <<-KYAML
         ---
         {
-          items: [
-            {
-              foo: 1, # note
-            },
-            {
-              foo: 2,
-            },
-          ],
+          items: [{
+            foo: 1, # note
+          }, {
+            foo: 2,
+          }],
         }
 
         KYAML
