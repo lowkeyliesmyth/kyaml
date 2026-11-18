@@ -116,6 +116,7 @@ describe "KYAML::Emitter" do
       YAML.parse(result).as_s.should eq("a\n  indented")
     end
   end
+
   describe "sequence rendering" do
     it "renders an empty sequence inline" do
       KYAML.emit([] of KYAML::Any).should eq("[]")
@@ -142,20 +143,6 @@ describe "KYAML::Emitter" do
       seq = [KYAML::Any.new("foo"), KYAML::Any.new(42), KYAML::Any.new(true)]
       KYAML.emit(seq).should eq(kyaml)
     end
-
-    # it "indents nested sequences with two spaces per level" do
-    #  kyaml = <<-KYAML
-    #  [
-    #    [
-    #      1,
-    #      2,
-    #    ],
-    #  ]
-    #  KYAML
-    #  inner = [KYAML::Any.new(1), KYAML::Any.new(2)]
-    #  outer = [KYAML::Any.new(inner)]
-    #  KYAML.emit(outer).should eq(kyaml)
-    # end
   end
 
   describe "mapping rendering" do
@@ -347,22 +334,44 @@ describe "KYAML::Emitter" do
   describe "document rendering" do
     it "wraps a scalar in --- and a trailing newline" do
       doc = KYAML::Doc.new(KYAML::Any.new(42), [] of KYAML::Comment)
-      KYAML.emit_doc(doc).should eq("---\n42\n")
+      expected = <<-KYAML
+        ---
+        42
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "wraps a mapping in --- and a trailing newline" do
       doc = KYAML::Doc.new(KYAML::Any.new({"foo" => KYAML::Any.new("bar")}), [] of KYAML::Comment)
-      KYAML.emit_doc(doc).should eq("---\n{\n  foo: \"bar\",\n}\n")
+      expected = <<-KYAML
+        ---
+        {
+          foo: "bar",
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "wraps an empty mapping" do
       doc = KYAML::Doc.new(KYAML::Any.new({} of String => KYAML::Any), [] of KYAML::Comment)
-      KYAML.emit_doc(doc).should eq("---\n{}\n")
+      expected = <<-KYAML
+        ---
+        {}
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "is reachable via KYAML::Doc#.to_kyaml" do
       doc = KYAML::Doc.new(KYAML::Any.new("waddup bro"), [] of KYAML::Comment)
-      doc.to_kyaml.should eq("---\n\"waddup bro\"\n")
+      expected = <<-KYAML
+        ---
+        "waddup bro"
+
+        KYAML
+      doc.to_kyaml.should eq(expected)
     end
 
     it "concatenates multiple docs via #emit_all_docs" do
@@ -370,52 +379,120 @@ describe "KYAML::Emitter" do
         KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment),
         KYAML::Doc.new(KYAML::Any.new(2), [] of KYAML::Comment),
       ]
-      KYAML.emit_all_docs(docs).should eq("---\n1\n---\n2\n")
+      expected = <<-KYAML
+        ---
+        1
+        ---
+        2
+
+        KYAML
+      KYAML.emit_all_docs(docs).should eq(expected)
     end
   end
 
   describe "comment emission" do
     it "renders a header comment above the `---` separator" do
       doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
-      KYAML.emit_doc(doc).should eq("# header\n---\n{\n  foo: 1,\n}\n")
+      expected = <<-KYAML
+        # header
+        ---
+        {
+          foo: 1,
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "renders a leading comment above its mapping pair" do
       doc = KYAML.parse_doc("---\n# leading\nfoo: 1\n")
-      KYAML.emit_doc(doc).should eq("---\n{\n  # leading\n  foo: 1,\n}\n")
+      expected = <<-KYAML
+        ---
+        {
+          # leading
+          foo: 1,
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "renders a trailing comment after the value's comma" do
       doc = KYAML.parse_doc("---\nfoo: 1 # trailing\n")
-      KYAML.emit_doc(doc).should eq("---\n{\n  foo: 1, # trailing\n}\n")
+      expected = <<-KYAML
+        ---
+        {
+          foo: 1, # trailing
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "renders a tail comment before the closing brace" do
       doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n  # tail\n")
-      KYAML.emit_doc(doc).should eq(
-        "---\n{\n  outer: {\n    foo: 1,\n    bar: 2,\n    # tail\n  },\n}\n")
+      expected = <<-KYAML
+        ---
+        {
+          outer: {
+            foo: 1,
+            bar: 2,
+            # tail
+          },
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "renders a column-shallow comment above the next sibling, not inside the container" do
       doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n# x\nbaz: 3\n")
-      KYAML.emit_doc(doc).should eq(
-        "---\n{\n  outer: {\n    foo: 1,\n    bar: 2,\n  },\n  # x\n  baz: 3,\n}\n"
-      )
+      expected = <<-KYAML
+        ---
+        {
+          outer: {
+            foo: 1,
+            bar: 2,
+          },
+          # x
+          baz: 3,
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "preserves line breaks across stacked leading comments" do
       doc = KYAML.parse_doc("---\n# line one\n# line two\nfoo: 1\n")
-      KYAML.emit_doc(doc).should eq(
-        "---\n{\n  # line one\n  # line two\n  foo: 1,\n}\n"
-      )
+      expected = <<-KYAML
+        ---
+        {
+          # line one
+          # line two
+          foo: 1,
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
 
     it "disables cuddling when a sequence element carries a comment" do
       doc = KYAML.parse_doc("items:\n- foo: 1 # note\n- foo: 2\n")
-      KYAML.emit_doc(doc).should eq(
-        "---\n{\n  items: [\n    {\n      foo: 1, # note\n    },\n" \
-        "    {\n      foo: 2,\n    },\n  ],\n}\n"
-      )
+      expected = <<-KYAML
+        ---
+        {
+          items: [
+            {
+              foo: 1, # note
+            },
+            {
+              foo: 2,
+            },
+          ],
+        }
+
+        KYAML
+      KYAML.emit_doc(doc).should eq(expected)
     end
   end
 
@@ -424,19 +501,39 @@ describe "KYAML::Emitter" do
       out = KYAML.emit(KYAML.parse("base: &a {x: 1}\nuse: *a\n").raw)
       out.should_not contain('&')
       out.should_not contain('*')
-      out.should eq("{\n  base: {\n    x: 1,\n  },\n  use: {\n    x: 1,\n  },\n}")
+      expected = <<-KYAML
+        {
+          base: {
+            x: 1,
+          },
+          use: {
+            x: 1,
+          },
+        }
+        KYAML
+      out.should eq(expected)
     end
 
     it "strips tags, emitting the resolved value with no tag markers" do
       out = KYAML.emit(KYAML.parse("foo: !!str 7\n").raw)
       out.should_not contain('!')
-      out.should eq(%({\n  foo: "7",\n}))
+      expected = <<-KYAML
+        {
+          foo: "7",
+        }
+        KYAML
+      out.should eq(expected)
     end
 
     it "strips unknown tags, emitting just the bare scalar" do
       out = KYAML.emit(KYAML.parse("foo: !mytag bar\n").raw)
       out.should_not contain('!')
-      out.should eq(%({\n  foo: "bar",\n}))
+      expected = <<-KYAML
+        {
+          foo: "bar",
+        }
+        KYAML
+      out.should eq(expected)
     end
   end
 end
