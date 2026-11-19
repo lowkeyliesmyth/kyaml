@@ -53,7 +53,7 @@ module KYAML
     docs
   end
 
-  # Parses a single K/YAML doc, returning KYAML::Doc`.
+  # Parses a single K/YAML doc, returning a `KYAML::Doc`.
   #
   # This is the comment-preserving entrypoint. The returned doc exposes its root and comments through detached snapshot copies.
   #

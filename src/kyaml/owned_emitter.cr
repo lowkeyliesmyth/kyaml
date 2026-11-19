@@ -105,10 +105,10 @@ module KYAML
 
       case first = sequence.elements.first.value
       when Owned::Mapping
-        return false if first.entries.empty?
+        return false if renders_empty?(first)
         sequence.elements.all? do |elem|
           value = elem.value
-          value.is_a?(Owned::Mapping) && !value.entries.empty?
+          value.is_a?(Owned::Mapping) && !renders_empty?(value)
         end
       when Owned::Sequence
         return false if first.elements.empty?
@@ -119,6 +119,11 @@ module KYAML
       else
         false
       end
+    end
+
+    # Return true when **mapping** renders empty as `{}`.
+    private def renders_empty?(mapping : Owned::Mapping) : Bool
+      mapping.entries.empty? && mapping.tail.empty?
     end
 
     # Emit the accumulated count of indents to IO.

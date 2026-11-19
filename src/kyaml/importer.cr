@@ -16,6 +16,7 @@ module KYAML
     private class CommentOwners
       getter leading = {} of YAML::Nodes::Node => Array(KYAML::Comment)
       getter trailing = {} of YAML::Nodes::Node => Array(KYAML::Comment)
+      getter mapping_tails = {} of YAML::Nodes::Mapping => Array(KYAML::Comment)
     end
 
     # Build an owned tree with normalized **root** values, referencing **yaml_doc** for node structure to attach parsed **comments** to owner nodes.
@@ -26,7 +27,7 @@ module KYAML
       if source.nil?
         # A doc with no nodes can only hold a null root. Anything else means that the parsed result and the root disagree which would def be a bug.
         raise ArgumentError.new("Parsed source is missing its value") unless root.raw.nil?
-        # An empty doc needs to be imprtable. A doc containing only comments means there's no node to own its comments, so can't be a tree and returns nil. Returning nil here lets callers choose to fallback to legacy state handling.
+        # An empty doc needs to be importable. A doc containing only comments means there's no node to own its comments, so can't be a tree and returns nil. Returning nil here lets callers choose to fallback to legacy state handling.
         return comments.empty? ? Owned::Tree.from_any(root) : nil
       end
 
@@ -42,6 +43,8 @@ module KYAML
           (owners.leading[key] ||= [] of KYAML::Comment) << comment
         elsif key = trailing_value_key_for(comment, source)
           (owners.trailing[key] ||= [] of KYAML::Comment) << comment
+        elsif mapping = flow_mapping_tail_for(comment, source)
+          (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -134,6 +137,47 @@ module KYAML
         return nested if nested
       end
       nil
+    end
+
+    # Search **source** for the flow mapping whose tail contains **comment**. Includes mappings nested inside sequences.
+    private def flow_mapping_tail_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Mapping?
+      case source
+      when YAML::Nodes::Mapping
+        return source if flow_mapping_tail?(comment, source)
+
+        source.each do |_, value|
+          found = flow_mapping_tail_for(comment, value)
+          return found if found
+        end
+      when YAML::Nodes::Sequence
+        source.nodes.each do |elem|
+          found = flow_mapping_tail_for(comment, elem)
+          return found if found
+        end
+      end
+      nil
+    end
+
+    # Check a flow-style **mapping** if **comment** sits between the last value's ending line and its closing brace.
+    private def flow_mapping_tail?(
+      comment : KYAML::Comment,
+      mapping : YAML::Nodes::Mapping,
+    ) : Bool
+      return false unless mapping.style.flow?
+      return false unless mapping.start_line < comment.line && comment.line < mapping.end_line
+
+      last_value : YAML::Nodes::Node? = nil
+      mapping.each { |_, value| last_value = value }
+
+      if value = last_value
+        value.end_line < comment.line
+      else
+        # An explicit tag can start on an earlier line than the opening brace
+        mapping.tag.nil?
+      end
     end
 
     # Internal helper to check if a **node** is a mapping or sequence container type.
@@ -262,6 +306,8 @@ module KYAML
         owners.trailing[k_node]?.try { |comments| entry.trailing.concat(comments) }
         attach(entry.value, v_node, owners)
       end
+
+      owners.mapping_tails[source]?.try { |comments| mapping.tail.concat(comments) }
     end
 
     # Internal implementation delegate for attaching comments from **owners** onto the normalized owned **sequence** by walking **sequence** and the raw **source** yaml node together.
