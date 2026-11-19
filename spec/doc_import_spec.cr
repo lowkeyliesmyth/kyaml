@@ -769,3 +769,110 @@ describe "leading comments inside parsed flow mappings" do
     doc.clone.to_kyaml.should eq(doc.to_kyaml)
   end
 end
+
+describe "parsed flow sequence tails" do
+  it "keeps the comments after the last sequence item in order and expands mappings that could otherwise be cuddled" do
+    doc = KYAML.parse_doc(<<-YAML)
+      items: # gap
+        [
+          {a: 1},
+          {b: 2},
+          # first
+          # second
+        ]
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        items: [
+          {
+            a: 1,
+          },
+          {
+            b: 2,
+          },
+          # first
+          # second
+        ],
+      }
+
+      KYAML
+    comments = [
+      KYAML::Comment.new(" gap", 1, 8),
+      KYAML::Comment.new(" first", 5, 5),
+      KYAML::Comment.new(" second", 6, 5),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    copy = doc.clone
+    copy.comments.should eq(comments)
+    copy.to_kyaml.should eq(expected)
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "tells apart the tail comment after the last item of a nested sequence from the tail comment after the last item of the outer sequence" do
+    doc = KYAML.parse_doc(<<-YAML)
+      [
+        [1,
+         # inner
+        ],
+        # outer
+      ]
+      YAML
+
+    expected = <<-KYAML
+      ---
+      [
+        [
+          1,
+          # inner
+        ],
+        # outer
+      ]
+
+      KYAML
+
+    doc.comments.should eq([
+      KYAML::Comment.new(" inner", 3, 4),
+      KYAML::Comment.new(" outer", 5, 3),
+    ])
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "falls back to the legacy behavior for an empty flow sequence with a comment inside it" do
+    doc = KYAML.parse_doc(<<-YAML)
+      items: # gap
+        [
+          # empty
+        ]
+      YAML
+
+    doc.root["items"].as_a.should be_empty
+    doc.comments.should eq([
+      KYAML::Comment.new(" gap", 1, 8),
+      KYAML::Comment.new(" empty", 3, 5),
+    ])
+    doc.to_kyaml.should_not contain("# gap")
+    doc.clone.to_kyaml.should eq(doc.to_kyaml)
+  end
+
+  it "does not mistake a comment between two items for the comment after the last item of the sequence" do
+    doc = KYAML.parse_doc(<<-YAML)
+      items: # gap
+        [
+          1,
+          # between
+          2,
+          # tail
+        ]
+      YAML
+
+    doc.root["items"][1].as_i.should eq(2)
+    doc.comments.map(&.text).should eq([" gap", " between", " tail"])
+    doc.to_kyaml.should_not contain("# gap")
+  end
+end

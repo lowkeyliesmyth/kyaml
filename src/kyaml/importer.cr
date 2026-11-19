@@ -17,12 +17,17 @@ module KYAML
       getter leading = {} of YAML::Nodes::Node => Array(KYAML::Comment)
       getter trailing = {} of YAML::Nodes::Node => Array(KYAML::Comment)
       getter mapping_tails = {} of YAML::Nodes::Mapping => Array(KYAML::Comment)
+      getter sequence_tails = {} of YAML::Nodes::Sequence => Array(KYAML::Comment)
     end
 
-    # Build an owned tree with normalized **root** values, referencing **yaml_doc** for node structure to attach parsed **comments** to owner nodes.
+    # Build an owned tree with normalized **root** values, the parsed **yaml_doc**'s node structure to attach **comments** to the right owner nodes.
     #
-    # Return `nil` for "non-ordinary" docs that can't be imported safely because of comments with ambiguous ownership.
-    def import(root : KYAML::Any, comments : Array(KYAML::Comment), yaml_doc : YAML::Nodes::Document) : Owned::Tree?
+    # Return `nil` if if the doc can't be imported safely because of comments with ambiguous owners.
+    def import(
+      root : KYAML::Any,
+      comments : Array(KYAML::Comment),
+      yaml_doc : YAML::Nodes::Document,
+    ) : Owned::Tree?
       source = yaml_doc.nodes.first?
       if source.nil?
         # A doc with no nodes can only hold a null root. Anything else means that the parsed result and the root disagree which would def be a bug.
@@ -47,6 +52,8 @@ module KYAML
           (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
         elsif key = flow_leading_key_for(comment, source)
           (owners.leading[key] ||= [] of KYAML::Comment) << comment
+        elsif sequence = flow_sequence_tail_for(comment, source)
+          (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -212,6 +219,32 @@ module KYAML
       nil
     end
 
+    # Find the flow sequence in **source** that contains **comment** after its last element but before the closing bracket.
+    private def flow_sequence_tail_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Sequence?
+      case source
+      when YAML::Nodes::Mapping
+        source.each do |_, v|
+          found = flow_sequence_tail_for(comment, v)
+          return found if found
+        end
+      when YAML::Nodes::Sequence
+        if source.style.flow? && comment.line < source.end_line
+          if last = source.nodes.last?
+            return source if last.end_line < comment.line
+          end
+        end
+
+        source.nodes.each do |elem|
+          found = flow_sequence_tail_for(comment, elem)
+          return found if found
+        end
+      end
+      nil
+    end
+
     # Check a flow-style **mapping** if **comment** sits between the last value's ending line and its closing brace.
     private def flow_mapping_tail?(
       comment : KYAML::Comment,
@@ -310,7 +343,8 @@ module KYAML
       end
     end
 
-    # Match up and attach comments from **owners** onto the normalized **owned** tree by walking **owned** and the raw **source** yaml together.
+    # Attach **owners**' comments onto **owned** node by walking it alongside the raw **source** YAML node.
+
     private def attach(
       owned : Owned::Node,
       source : YAML::Nodes::Node,
@@ -327,14 +361,14 @@ module KYAML
         attach_sequence(owned, source_sequence, owners)
       when Owned::Scalar
         unless source.is_a?(YAML::Nodes::Scalar)
-          raise ArgumentError.new("parsed source and value must both be scalars")
+          raise ArgumentError.new("Parsed source and value must both be scalars")
         end
       else
         raise ArgumentError.new("Unexpected owned node: #{owned.class}")
       end
     end
 
-    # Internal implementation delegate for attaching comments from **owners** onto the normalized owned **mapping** by walking **mapping** and the raw **source** yaml node together.
+    # Attach comments from **owners** onto **mapping** by walking it alongside the raw **source** YAML node.
     # :nodoc:
     private def attach_mapping(
       mapping : Owned::Mapping,
@@ -361,7 +395,8 @@ module KYAML
       owners.mapping_tails[source]?.try { |comments| mapping.tail.concat(comments) }
     end
 
-    # Internal implementation delegate for attaching comments from **owners** onto the normalized owned **sequence** by walking **sequence** and the raw **source** yaml node together.
+    # Attach comments from **owners** onto **sequence** by walking it alongside the raw **source** YAML node.
+    # :nodoc:
     private def attach_sequence(
       sequence : Owned::Sequence,
       source : YAML::Nodes::Sequence,
@@ -374,6 +409,8 @@ module KYAML
       sequence.elements.zip(source.nodes) do |elem, node|
         attach(elem.value, node, owners)
       end
+
+      owners.sequence_tails[source]?.try { |comments| sequence.tail.concat(comments) }
     end
   end
 end
