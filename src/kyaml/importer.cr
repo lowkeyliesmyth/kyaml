@@ -45,6 +45,8 @@ module KYAML
           (owners.trailing[key] ||= [] of KYAML::Comment) << comment
         elsif mapping = flow_mapping_tail_for(comment, source)
           (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
+        elsif key = flow_leading_key_for(comment, source)
+          (owners.leading[key] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -157,6 +159,55 @@ module KYAML
           found = flow_mapping_tail_for(comment, elem)
           return found if found
         end
+      end
+      nil
+    end
+
+    # Find the next entry owning **comment** inside a flow mapping in **source**.
+    private def flow_leading_key_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Node?
+      case source
+      when YAML::Nodes::Mapping
+        if source.style.flow?
+          key = next_flow_key_for(comment, source)
+          return key if key
+        end
+
+        source.each do |_, val|
+          found = flow_leading_key_for(comment, val)
+          return found if found
+        end
+      when YAML::Nodes::Sequence
+        source.nodes.each do |elem|
+          found = flow_leading_key_for(comment, elem)
+          return found if found
+        end
+      end
+      nil
+    end
+
+    # Find the key that **comment** should attach to in a flow-style **mapping** when it sits between two entries (after the previous value and before the next key).
+    private def next_flow_key_for(
+      comment : KYAML::Comment,
+      mapping : YAML::Nodes::Mapping,
+    ) : YAML::Nodes::Node?
+      return unless mapping.start_line < comment.line && comment.line < mapping.end_line
+
+      lower_line = mapping.start_line
+      first = true
+
+      mapping.each do |k, v|
+        if comment.line < k.start_line
+          # A tag can come before the opening brace on a separate line.
+          return if first && mapping.tag
+          return k if lower_line < comment.line
+          return
+        end
+
+        lower_line = v.end_line
+        first = false
       end
       nil
     end

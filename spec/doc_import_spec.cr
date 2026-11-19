@@ -643,8 +643,8 @@ describe "parsed flow mapping tails" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "doesn't take a comment before a later entry as the mapping tail" do
-    input = <<-YAML
+  it "imports a leading comment before the next flow entry and keeps the final tail on the mapping" do
+    doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         {
           a: 1,
@@ -653,12 +653,119 @@ describe "parsed flow mapping tails" do
           # tail
         }
       YAML
-    doc = KYAML.parse_doc(input)
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          a: 1,
+          # before b
+          b: 2,
+          # tail
+        },
+      }
 
-    doc.comments.map(&.text).should eq([" gap", " before b", " tail"])
-    doc.root["outer"]["b"].as_i.should eq(2)
+      KYAML
 
-    # The entry-leading comment is unhandled and so is omitted, forcing the whole doc to fallback to legacy behavior.
+    comments = [
+      KYAML::Comment.new(" gap", 1, 8),
+      KYAML::Comment.new(" before b", 4, 5),
+      KYAML::Comment.new(" tail", 6, 5),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.comments.should eq(comments)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+end
+
+describe "leading comments inside parsed flow mappings" do
+  it "keeps stacked comments on the first entry of a mapping inside a sequence" do
+    doc = KYAML.parse_doc(<<-YAML)
+      - {
+          # first
+
+          # second
+          a: 1,
+        }
+      - {b: 2}
+      YAML
+
+    expected = <<-KYAML
+      ---
+      [{
+        # first
+        # second
+        a: 1,
+      }, {
+        b: 2,
+      }]
+
+      KYAML
+    comments = [
+      KYAML::Comment.new(" first", 2, 5),
+      KYAML::Comment.new(" second", 4, 5),
+    ]
+
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+    doc.clone.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "distinguishes a comment before a nested value from one before the next sibling key" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        {
+          a: {
+            # inner
+            x: 1,
+          },
+          # sibling
+          b: 2,
+        }
+      YAML
+
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          a: {
+            # inner
+            x: 1,
+          },
+          # sibling
+          b: 2,
+        },
+      }
+
+      KYAML
+
+    doc.comments.should eq([
+      KYAML::Comment.new(" gap", 1, 8),
+      KYAML::Comment.new(" inner", 4, 7),
+      KYAML::Comment.new(" sibling", 7, 5),
+    ])
+    doc.to_kyaml.should eq(expected)
+    KYAML.parse(expected).should eq(doc.root)
+  end
+
+  it "falls back the whole doc to legacy when a leading flow comment also has an unhandled block tail" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        {
+          # before a
+          a: 1,
+        }
+      # block tail
+      YAML
+
+    doc.comments.map(&.text).should eq([" gap", " before a", " block tail"])
+    doc.root["outer"]["a"].as_i.should eq(1)
     doc.to_kyaml.should_not contain("# gap")
+    doc.clone.to_kyaml.should eq(doc.to_kyaml)
   end
 end
