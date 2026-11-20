@@ -18,6 +18,7 @@ module KYAML
       getter trailing = {} of YAML::Nodes::Node => Array(KYAML::Comment)
       getter mapping_tails = {} of YAML::Nodes::Mapping => Array(KYAML::Comment)
       getter sequence_tails = {} of YAML::Nodes::Sequence => Array(KYAML::Comment)
+      getter element_leading = {} of YAML::Nodes::Node => Array(KYAML::Comment)
     end
 
     # Build an owned tree with normalized **root** values, the parsed **yaml_doc**'s node structure to attach **comments** to the right owner nodes.
@@ -54,6 +55,8 @@ module KYAML
           (owners.leading[key] ||= [] of KYAML::Comment) << comment
         elsif sequence = flow_sequence_tail_for(comment, source)
           (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
+        elsif element = flow_leading_element_for(comment, source)
+          (owners.element_leading[element] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -245,6 +248,49 @@ module KYAML
       nil
     end
 
+    # Find the flow sequence element in **source** that owns **comment** as a standalone leading comment.
+    private def flow_leading_element_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Node?
+      case source
+      when YAML::Nodes::Mapping
+        source.each do |_, v|
+          found = flow_leading_element_for(comment, v)
+          return found if found
+        end
+      when YAML::Nodes::Sequence
+        if source.style.flow?
+          element = next_flow_element_for(comment, source)
+          return element if element
+        end
+
+        source.nodes.each do |child|
+          found = flow_leading_element_for(comment, child)
+          return found if found
+        end
+      end
+      nil
+    end
+
+    # Find the element in **sequence** that **comment** should attach to as a leading comment.
+    # Return the element immediately following **comment** when it falls strictly between two elements, or the first element if **comment** comes after the opening line and before the first element (unless a tag hides that spot).
+    private def next_flow_element_for(
+      comment : KYAML::Comment,
+      sequence : YAML::Nodes::Sequence,
+    ) : YAML::Nodes::Node?
+      lower_line = sequence.start_line
+      sequence.nodes.each_with_index do |elem, i|
+        if comment.line < elem.start_line
+          return if i.zero? && sequence.tag
+          return elem if lower_line < comment.line
+          return
+        end
+
+        lower_line = elem.end_line
+      end
+    end
+
     # Check a flow-style **mapping** if **comment** sits between the last value's ending line and its closing brace.
     private def flow_mapping_tail?(
       comment : KYAML::Comment,
@@ -407,6 +453,7 @@ module KYAML
       end
 
       sequence.elements.zip(source.nodes) do |elem, node|
+        owners.element_leading[node]?.try { |comments| elem.leading.concat(comments) }
         attach(elem.value, node, owners)
       end
 
