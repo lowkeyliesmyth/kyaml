@@ -149,10 +149,6 @@ describe "parsed mapping-entry trailing comments" do
         "outer: # gap\n  a: 1\n  b: | # block\n    text\n",
         [" gap", " block"],
       },
-      {
-        "outer: # gap\n  - {a: 1} # note\n",
-        [" gap", " note"],
-      },
     ]
 
     cases.each do |test_case|

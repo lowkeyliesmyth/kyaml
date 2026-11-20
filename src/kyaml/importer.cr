@@ -54,7 +54,7 @@ module KYAML
           (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
         elsif element = flow_leading_element_for(comment, source)
           (owners.element_leading[element] ||= [] of KYAML::Comment) << comment
-        elsif element = flow_trailing_element_for(comment, source)
+        elsif element = trailing_element_for(comment, source)
           (owners.element_trailing[element] ||= [] of KYAML::Comment) << comment
         else
           return
@@ -290,25 +290,26 @@ module KYAML
       end
     end
 
-    # Find the flow sequence element in **source** whose value ends right before **comment**, so the comment can be attached as a trailing comment on that element.
-    private def flow_trailing_element_for(
+    # Find the element in **source** whose value ends right before **comment**, so the comment can be attached as a trailing comment on that element.
+    private def trailing_element_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
     ) : YAML::Nodes::Node?
       case source
       when YAML::Nodes::Mapping
         source.each do |_, v|
-          found = flow_trailing_element_for(comment, v)
+          found = trailing_element_for(comment, v)
           return found if found
         end
       when YAML::Nodes::Sequence
-        if source.style.flow? && source.start_line <= comment.line && comment.line < source.end_line
-          candidate = preceding_flow_element(comment, source)
+        # Flow sequences have a visible closing bracket. Block sequences do not.
+        if source.style.block? || (source.style.flow? && source.start_line <= comment.line && comment.line < source.end_line)
+          candidate = preceding_sequence_element(comment, source)
           return candidate if candidate && value_ends_before?(comment, candidate)
         end
 
         source.nodes.each do |elem|
-          found = flow_trailing_element_for(comment, elem)
+          found = trailing_element_for(comment, elem)
           return found if found
         end
       end
@@ -316,7 +317,7 @@ module KYAML
     end
 
     # Find the last element in **sequence** whose start position is before **comment**, handling the case where multiple elements share the same source line.
-    private def preceding_flow_element(
+    private def preceding_sequence_element(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
     ) : YAML::Nodes::Node?
