@@ -19,16 +19,13 @@ module KYAML
       getter mapping_tails = {} of YAML::Nodes::Mapping => Array(KYAML::Comment)
       getter sequence_tails = {} of YAML::Nodes::Sequence => Array(KYAML::Comment)
       getter element_leading = {} of YAML::Nodes::Node => Array(KYAML::Comment)
+      getter element_trailing = {} of YAML::Nodes::Node => Array(KYAML::Comment)
     end
 
     # Build an owned tree with normalized **root** values, the parsed **yaml_doc**'s node structure to attach **comments** to the right owner nodes.
     #
     # Return `nil` if if the doc can't be imported safely because of comments with ambiguous owners.
-    def import(
-      root : KYAML::Any,
-      comments : Array(KYAML::Comment),
-      yaml_doc : YAML::Nodes::Document,
-    ) : Owned::Tree?
+    def import(root : KYAML::Any, comments : Array(KYAML::Comment), yaml_doc : YAML::Nodes::Document) : Owned::Tree? # ameba:disable Metrics/CyclomaticComplexity
       source = yaml_doc.nodes.first?
       if source.nil?
         # A doc with no nodes can only hold a null root. Anything else means that the parsed result and the root disagree which would def be a bug.
@@ -57,6 +54,8 @@ module KYAML
           (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
         elsif element = flow_leading_element_for(comment, source)
           (owners.element_leading[element] ||= [] of KYAML::Comment) << comment
+        elsif element = flow_trailing_element_for(comment, source)
+          (owners.element_trailing[element] ||= [] of KYAML::Comment) << comment
         else
           return
         end
@@ -291,6 +290,46 @@ module KYAML
       end
     end
 
+    # Find the flow sequence element in **source** whose value ends right before **comment**, so the comment can be attached as a trailing comment on that element.
+    private def flow_trailing_element_for(
+      comment : KYAML::Comment,
+      source : YAML::Nodes::Node,
+    ) : YAML::Nodes::Node?
+      case source
+      when YAML::Nodes::Mapping
+        source.each do |_, v|
+          found = flow_trailing_element_for(comment, v)
+          return found if found
+        end
+      when YAML::Nodes::Sequence
+        if source.style.flow? && source.start_line <= comment.line && comment.line < source.end_line
+          candidate = preceding_flow_element(comment, source)
+          return candidate if candidate && value_ends_before?(comment, candidate)
+        end
+
+        source.nodes.each do |elem|
+          found = flow_trailing_element_for(comment, elem)
+          return found if found
+        end
+      end
+      nil
+    end
+
+    # Find the last element in **sequence** whose start position is before **comment**, handling the case where multiple elements share the same source line.
+    private def preceding_flow_element(
+      comment : KYAML::Comment,
+      sequence : YAML::Nodes::Sequence,
+    ) : YAML::Nodes::Node?
+      candidate : YAML::Nodes::Node? = nil
+      sequence.nodes.each do |elem|
+        break if elem.start_line > comment.line
+        break if elem.start_line == comment.line && elem.start_column >= comment.column
+
+        candidate = elem
+      end
+      candidate
+    end
+
     # Check a flow-style **mapping** if **comment** sits between the last value's ending line and its closing brace.
     private def flow_mapping_tail?(
       comment : KYAML::Comment,
@@ -454,6 +493,7 @@ module KYAML
 
       sequence.elements.zip(source.nodes) do |elem, node|
         owners.element_leading[node]?.try { |comments| elem.leading.concat(comments) }
+        owners.element_trailing[node]?.try { |comments| elem.trailing.concat(comments) }
         attach(elem.value, node, owners)
       end
 
