@@ -71,16 +71,17 @@ module KYAML
     protected def initialize(@state : Owned::Tree | LegacyState)
     end
 
-    # Build a new doc from a supported "ordinary" source **yaml_doc**, **comments**, and **root**, importing them into an owned, editable tree.
+    # Build a doc from a parsed source, importing **root**, **comments**, and **yaml_doc** into an owned, editable tree using **source_lines** for context.
     #
-    # Fallback to non-editable doc if import isn't supported.
+    # Falls back to a non-editable doc if the import isn't supported.
     # :nodoc:
     protected def self.from_parsed(
       root : KYAML::Any,
       comments : Array(KYAML::Comment),
       yaml_doc : YAML::Nodes::Document,
+      source_lines : Array(String),
     ) : Doc
-      if tree = Importer.import(root, comments, yaml_doc)
+      if tree = Importer.import(root, comments, yaml_doc, source_lines)
         new(tree)
       else
         new(LegacyState.new(root, comments, yaml_doc))

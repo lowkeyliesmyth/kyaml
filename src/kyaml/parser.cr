@@ -53,7 +53,7 @@ module KYAML
     docs
   end
 
-  # Parses a single K/YAML doc, returning a `KYAML::Doc`.
+  # Parse a single K/YAML doc **input**, returning a `KYAML::Doc`.
   #
   # This is the comment-preserving entrypoint. The returned doc exposes its root and comments through detached snapshot copies.
   #
@@ -66,7 +66,7 @@ module KYAML
     node = yaml_doc.nodes.first? || empty_scalar
     Validator.validate(node, strict)
     root = KYAML::Any.new(YAML::ParseContext.new, node)
-    KYAML::Doc.from_parsed(root, KYAML::CommentScanner.scan(text), yaml_doc)
+    KYAML::Doc.from_parsed(root, KYAML::CommentScanner.scan(text), yaml_doc, text.lines)
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(
       ex.message || "YAML parse error",
@@ -75,7 +75,7 @@ module KYAML
     )
   end
 
-  # Parses a multi-doc K/YAML stream, block variant.  Yields each doc as a `KYAML::Doc`.
+  # Parses a multi-doc K/YAML **input** stream, block variant.  Yields each doc as a `KYAML::Doc`.
   # Each doc owns only its own comments, the scanner partitions the full comment list per doc by `---` separator.
   #
   # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
@@ -85,6 +85,7 @@ module KYAML
     text = input.is_a?(IO) ? input.gets_to_end : input
     comments = KYAML::CommentScanner.scan(text)
     yaml_docs = YAML::Nodes.parse_all(text)
+    source_lines = text.lines
 
     starts = yaml_docs.map(&.start_line)
     # Bucket comments by doc index so they can be passed to `KYAML::Doc` constructor and paired with its associated `KYAML::Any` content
@@ -102,7 +103,7 @@ module KYAML
       node = yaml_doc.nodes.first? || empty_scalar
       Validator.validate(node, strict)
       root = KYAML::Any.new(YAML::ParseContext.new, node)
-      yield KYAML::Doc.from_parsed(root, doc_buckets[i], yaml_doc)
+      yield KYAML::Doc.from_parsed(root, doc_buckets[i], yaml_doc, source_lines)
     end
   rescue ex : YAML::ParseException
     raise KYAML::ParseError.new(
