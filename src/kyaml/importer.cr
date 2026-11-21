@@ -67,6 +67,11 @@ module KYAML
           when BlockSlot::MappingTail
             mapping = hit.node.as(YAML::Nodes::Mapping)
             (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
+          when BlockSlot::ElementLeading
+            (owners.element_leading[hit.node] ||= [] of KYAML::Comment) << comment
+          when BlockSlot::SequenceTail
+            sequence = hit.node.as(YAML::Nodes::Sequence)
+            (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
           else
             raise ArgumentError.new("Unexpected block comment slot: #{hit.slot}")
           end

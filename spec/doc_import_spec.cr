@@ -386,43 +386,6 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps the doc as legacy when a direct sequence-element comment is unhandled" do
-    doc = KYAML.parse_doc(<<-YAML)
-      - a:
-          # gap
-          b: 1
-      # direct
-      - c: 2
-      YAML
-    expected = <<-KYAML
-      ---
-      [
-        {
-          a: {
-            # gap
-            b: 1,
-          },
-        },
-        # direct
-        {
-          c: 2,
-        },
-      ]
-
-      KYAML
-
-    comments = [
-      KYAML::Comment.new(" gap", 2, 5),
-      KYAML::Comment.new(" direct", 4, 1),
-    ]
-
-    doc.comments.should eq(comments)
-    doc.to_kyaml.should eq(expected)
-    doc.clone.comments.should eq(comments)
-    doc.clone.to_kyaml.should eq(expected)
-    KYAML.parse(expected).should eq(doc.root)
-  end
-
   it "doesn't bypass the duped-key gate for a doc with a gap comment" do
     doc = KYAML.parse_doc(<<-YAML)
       a:

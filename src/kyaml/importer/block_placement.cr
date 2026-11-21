@@ -9,9 +9,9 @@ module KYAML
     end
 
     # Describes where a comment attaches within a block collection:
-    # - which slot it occupies
+    # - which BlockSlot bucket this comment fits into
     # - which node it's connected to
-    # - the expected indentation at that point.
+    # - the expected indentation at that location
     private record BlockHit,
       slot : BlockSlot,
       node : YAML::Nodes::Node,
@@ -42,7 +42,40 @@ module KYAML
       line[0, comment.column - 1].strip.empty?
     end
 
-    # Find the k-v pair that a **comment** belongs to inside a block **mapping**.
+    private def sequence_block_hit(
+      comment : KYAML::Comment,
+      sequence : YAML::Nodes::Sequence,
+    ) : BlockHit?
+      return if sequence.nodes.empty?
+
+      indent = sequence.start_column
+      previous : YAML::Nodes::Node? = nil
+      following : YAML::Nodes::Node? = nil
+
+      sequence.nodes.each do |elem|
+        if comment.line < elem.start_line
+          following = elem
+          break
+        end
+        previous = elem
+      end
+
+      nested = previous.try { |v| nested_block_hit(comment, v) }
+      return nested if nested && nested.indent > indent
+      return nested if comment.column < indent
+
+      if value = previous
+        return nested if comment.line <= content_end_line(value)
+      end
+
+      if element = following
+        BlockHit.new(BlockSlot::ElementLeading, element, indent)
+      else
+        nested || BlockHit.new(BlockSlot::SequenceTail, sequence, indent)
+      end
+    end
+
+    # Find the k-v pair `BlockHit` that a **comment** belongs to inside a block **mapping**.
     private def mapping_block_hit(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
@@ -68,6 +101,9 @@ module KYAML
 
       return nested if comment.column < indent
       if value = previous
+        # Keep the nested element-leading hit if the nested sequence has a next element
+        return nested if nested && nested.slot.element_leading?
+
         return nested if comment.line <= content_end_line(value)
       end
 
@@ -86,8 +122,12 @@ module KYAML
       node : YAML::Nodes::Node,
     ) : BlockHit?
       return if comment.line < node.start_line
-      if node.is_a?(YAML::Nodes::Mapping) && node.style.block?
-        mapping_block_hit(comment, node)
+
+      case node
+      when YAML::Nodes::Mapping
+        mapping_block_hit(comment, node) if node.style.block?
+      when YAML::Nodes::Sequence
+        sequence_block_hit(comment, node) if node.style.block?
       end
     end
 
@@ -108,8 +148,12 @@ module KYAML
         return if comment.line >= doc.end_line
       end
       return if doc.end_line > 0 & comment.line > doc.end_line
-      if root.is_a?(YAML::Nodes::Mapping) && root.style.block?
-        mapping_block_hit(comment, root)
+
+      case root
+      when YAML::Nodes::Mapping
+        mapping_block_hit(comment, root) if root.style.block?
+      when YAML::Nodes::Sequence
+        sequence_block_hit(comment, root) if root.style.block?
       end
     end
   end
