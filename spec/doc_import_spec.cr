@@ -472,4 +472,65 @@ describe "ordinary parsed doc import" do
     yielded.map(&.comments).should eq(docs.map(&.comments))
     yielded.map(&.to_kyaml).should eq(docs.map(&.to_kyaml))
   end
+
+  it "treats a scalar '<<' as an ordinary key and leaves the value unchanged" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        <<: literal
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          "<<": "literal",
+        },
+      }
+
+      KYAML
+    doc.root["outer"]["<<"].as_s.should eq("literal")
+    doc.to_kyaml.should eq(expected)
+  end
+
+  it "uses the explicit string tag to help decide whether a source key is a merge or a scalar" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        !!str <<: {x: 1}
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          "<<": {
+            x: 1,
+          },
+        },
+      }
+
+      KYAML
+
+    doc.to_kyaml.should eq(expected)
+    doc.root["outer"]["<<"]["x"].as_i.should eq(1)
+    doc.to_kyaml.should contain(" gap\n  outer:")
+  end
+
+  it "keep a merge that actually merges on the legacy processing path" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        <<: {x: 1}
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        outer: {
+          x: 1,
+        },
+      }
+
+      KYAML
+    doc.root["outer"]["x"].as_i.should eq(1)
+    doc.to_kyaml.should eq(expected)
+    doc.to_kyaml.should_not contain("# gap")
+  end
 end

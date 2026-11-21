@@ -85,9 +85,9 @@ module KYAML
       Owned::Tree.new(tree.root, header: header)
     end
 
-    # A **node** is "ordinary" when it has no duped keys, merge keys, anchors, or aliases.
+    # A **node** is "ordinary" when it has no duped keys, merge keys, anchors, or aliases. And thus doesn't trigger the "legacy" uneditable behavior.
     #
-    # Exclude source nodes that are sensitive to normalization before assigning owner.
+    # Skip source nodes whose comments could become ambiguous after normalization.
     private def ordinary?(node : YAML::Nodes::Node) : Bool
       return false if node.anchor
 
@@ -106,7 +106,7 @@ module KYAML
           end
 
           text = k.value
-          return false if text == "<<"
+          return false if text == "<<" && merge_operand?(k, v)
           return false unless keys.add?(text)
           return false unless ordinary?(k) && ordinary?(v)
         end
@@ -186,6 +186,25 @@ module KYAML
       end
 
       owners.sequence_tails[source]?.try { |comments| sequence.tail.concat(comments) }
+    end
+
+    # Check a `<<` **key** to assess if **value** can be merged. Explicitly string-tagged keys are treated as literal keys.
+    private def merge_operand?(
+      key : YAML::Nodes::Scalar,
+      value : YAML::Nodes::Node,
+    ) : Bool
+      return false if key.tag == "tag:yaml.org,2002:str"
+
+      case value
+      when YAML::Nodes::Mapping, YAML::Nodes::Alias
+        true
+      when YAML::Nodes::Sequence
+        value.nodes.all? do |elem|
+          elem.is_a?(YAML::Nodes::Mapping) || elem.is_a?(YAML::Nodes::Alias)
+        end
+      else
+        false
+      end
     end
   end
 end
