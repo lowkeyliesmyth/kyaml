@@ -3,6 +3,7 @@ require "yaml"
 require "./any"
 require "./comment"
 require "./owned"
+require "./importer/block_placement"
 require "./importer/placement"
 
 module KYAML
@@ -26,6 +27,8 @@ module KYAML
     # Build an owned tree with normalized **root** values, the parsed **yaml_doc**'s node structure to attach **comments** to the right owner nodes.
     #
     # Return `nil` if if the doc can't be imported safely because of comments with ambiguous owners.
+    #
+    # TODO: This thing is monstrous, circle back to split it up.
     def import(root : KYAML::Any, comments : Array(KYAML::Comment), yaml_doc : YAML::Nodes::Document, source_lines : Array(String)) : Owned::Tree? # ameba:disable Metrics/CyclomaticComplexity
       source = yaml_doc.nodes.first?
       if source.nil?
@@ -57,6 +60,16 @@ module KYAML
           (owners.element_leading[element] ||= [] of KYAML::Comment) << comment
         elsif element = trailing_element_for(comment, source)
           (owners.element_trailing[element] ||= [] of KYAML::Comment) << comment
+        elsif hit = block_hit(comment, source, yaml_doc, source_lines)
+          case hit.slot
+          when BlockSlot::EntryLeading
+            (owners.leading[hit.node] ||= [] of KYAML::Comment) << comment
+          when BlockSlot::MappingTail
+            mapping = hit.node.as(YAML::Nodes::Mapping)
+            (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
+          else
+            raise ArgumentError.new("Unexpected block comment slot: #{hit.slot}")
+          end
         else
           return
         end

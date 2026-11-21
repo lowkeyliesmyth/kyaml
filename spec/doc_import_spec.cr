@@ -114,27 +114,6 @@ describe "ordinary parsed doc import" do
       KYAML
   end
 
-  it "falls back to legacy uneditable behavior when there are unhandled comments" do
-    doc = KYAML.parse_doc(<<-YAML)
-      a: # why
-       b: 1
-      # tail
-
-      YAML
-
-    doc.comments.map(&.text).should eq([" why", " tail"])
-    doc.to_kyaml.should eq(<<-KYAML)
-      ---
-      {
-        a: {
-          b: 1,
-        },
-        # tail
-      }
-
-      KYAML
-  end
-
   it "moves a standalone gap comment to above its entry and keeps snapshots stable" do
     doc = KYAML.parse_doc(<<-YAML)
       a:
@@ -261,35 +240,6 @@ describe "ordinary parsed doc import" do
       KYAML
 
     doc.comments.should eq([KYAML::Comment.new(" inside", 2, 5)])
-    doc.to_kyaml.should eq(expected)
-    doc.clone.to_kyaml.should eq(expected)
-    KYAML.parse(expected).should eq(doc.root)
-  end
-
-  it "treats the whole doc as legacy when a supported gap is paired with an unhandled tail" do
-    doc = KYAML.parse_doc(<<-YAML)
-      a:
-        # gap
-        b: 1
-      # tail
-      YAML
-    expected = <<-KYAML
-      ---
-      {
-        a: {
-          # gap
-          b: 1,
-        },
-        # tail
-      }
-
-      KYAML
-    comments = [
-      KYAML::Comment.new(" gap", 2, 3),
-      KYAML::Comment.new(" tail", 4, 1),
-    ]
-
-    doc.comments.should eq(comments)
     doc.to_kyaml.should eq(expected)
     doc.clone.to_kyaml.should eq(expected)
     KYAML.parse(expected).should eq(doc.root)

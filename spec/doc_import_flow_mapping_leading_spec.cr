@@ -71,20 +71,4 @@ describe "leading comments inside parsed flow mappings" do
     doc.to_kyaml.should eq(expected)
     KYAML.parse(expected).should eq(doc.root)
   end
-
-  it "falls back the whole doc to legacy when a leading flow comment also has an unhandled block tail" do
-    doc = KYAML.parse_doc(<<-YAML)
-      outer: # gap
-        {
-          # before a
-          a: 1,
-        }
-      # block tail
-      YAML
-
-    doc.comments.map(&.text).should eq([" gap", " before a", " block tail"])
-    doc.root["outer"]["a"].as_i.should eq(1)
-    doc.to_kyaml.should_not contain("# gap")
-    doc.clone.to_kyaml.should eq(doc.to_kyaml)
-  end
 end

@@ -82,17 +82,4 @@ describe "parsed block sequence element trailing comments" do
     doc.to_kyaml.should eq(expected)
     KYAML.parse(expected).should eq(doc.root)
   end
-
-  it "uses the old behavior when a standalone block sequence tail comment is also present" do
-    doc = KYAML.parse_doc(<<-YAML)
-      items: # gap
-        - 1 # inline
-        # tail
-      YAML
-
-    doc.comments.map(&.text).should eq([" gap", " inline", " tail"])
-    doc.root["items"][0].as_i.should eq(1)
-    doc.to_kyaml.should_not contain("# gap")
-    doc.clone.to_kyaml.should eq(doc.to_kyaml)
-  end
 end

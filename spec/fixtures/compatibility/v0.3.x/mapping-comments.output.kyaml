@@ -3,8 +3,8 @@
 {
   # API version
   apiVersion: "v1", # stable API
+  # service identity
   metadata: {
-    # service identity
     name: "demo", # display name
     labels: {
       app: "demo",
