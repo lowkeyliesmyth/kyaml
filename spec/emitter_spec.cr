@@ -392,7 +392,13 @@ describe "KYAML::Emitter" do
 
   describe "writing comments" do
     it "writes a header comment above ---" do
-      doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
+      input = <<-YAML
+        # header
+        ---
+        foo: 1
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         # header
         ---
@@ -405,7 +411,13 @@ describe "KYAML::Emitter" do
     end
 
     it "writes a leading comment above its key" do
-      doc = KYAML.parse_doc("---\n# leading\nfoo: 1\n")
+      input = <<-YAML
+        ---
+        # leading
+        foo: 1
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -418,7 +430,12 @@ describe "KYAML::Emitter" do
     end
 
     it "writes a trailing comment after the value and comma" do
-      doc = KYAML.parse_doc("---\nfoo: 1 # trailing\n")
+      input = <<-YAML
+        ---
+        foo: 1 # trailing
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -430,7 +447,14 @@ describe "KYAML::Emitter" do
     end
 
     it "writes a tail comment before the closing brace" do
-      doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n  # tail\n")
+      input = <<-YAML
+        outer:
+          foo: 1
+          bar: 2
+          # tail
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -446,7 +470,15 @@ describe "KYAML::Emitter" do
     end
 
     it "writes a less-indented comment above the next key, outside the nested map" do
-      doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n# x\nbaz: 3\n")
+      input = <<-YAML
+        outer:
+          foo: 1
+          bar: 2
+        # x
+        baz: 3
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -463,7 +495,14 @@ describe "KYAML::Emitter" do
     end
 
     it "keeps stacked leading comments on separate lines" do
-      doc = KYAML.parse_doc("---\n# line one\n# line two\nfoo: 1\n")
+      input = <<-YAML
+        ---
+        # line one
+        # line two
+        foo: 1
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -477,7 +516,13 @@ describe "KYAML::Emitter" do
     end
 
     it "cuddles list brackets next to maps when one map has a comment" do
-      doc = KYAML.parse_doc("items:\n- foo: 1 # note\n- foo: 2\n")
+      input = <<-YAML
+        items:
+        - foo: 1 # note
+        - foo: 2
+
+        YAML
+      doc = KYAML.parse_doc(input)
       expected = <<-KYAML
         ---
         {
@@ -495,7 +540,12 @@ describe "KYAML::Emitter" do
 
   describe "removing anchors, aliases, and tags" do
     it "replaces an alias with the value it points to and drops & and * markers" do
-      out = KYAML.emit(KYAML.parse("base: &a {x: 1}\nuse: *a\n").raw)
+      input = <<-YAML
+        base: &a {x: 1}
+        use: *a
+
+        YAML
+      out = KYAML.emit(KYAML.parse(input).raw)
       out.should_not contain('&')
       out.should_not contain('*')
       expected = <<-KYAML

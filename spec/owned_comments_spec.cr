@@ -79,24 +79,24 @@ describe "storing and writing out 'owned' comments" do
 
   it "writes every kind of comment in the same order as the comment list" do
     tree = owned_comments_fixture
-    expected = [
-      "# c0",
-      "---",
-      "{",
-      "  # c1",
-      "  items: [",
-      "    # c2",
-      "    {",
-      "      # c3",
-      "      a: 1, # c4",
-      "      # c5",
-      "    }, # c6",
-      "    # c7",
-      "  ], # c8",
-      "  # c9",
-      "}",
-      "",
-    ].join("\n")
+    expected = <<-KYAML
+      # c0
+      ---
+      {
+        # c1
+        items: [
+          # c2
+          {
+            # c3
+            a: 1, # c4
+            # c5
+          }, # c6
+          # c7
+        ], # c8
+        # c9
+      }
+
+      KYAML
 
     output = owned_comments_render(tree)
 
@@ -138,16 +138,16 @@ describe "storing and writing out 'owned' comments" do
     mapping = sequence.elements.first.value.as(KYAML::Owned::Mapping)
     mapping.entries.first.leading << KYAML::Comment.new(" inner", 1, 1)
 
-    expected = [
-      "---",
-      "[{",
-      "  # inner",
-      "  a: 1,",
-      "}, {",
-      "  a: 2,",
-      "}]",
-      "",
-    ].join("\n")
+    expected = <<-KYAML
+      ---
+      [{
+        # inner
+        a: 1,
+      }, {
+        a: 2,
+      }]
+
+      KYAML
 
     owned_comments_render(tree).should eq(expected)
   end
@@ -156,7 +156,13 @@ describe "storing and writing out 'owned' comments" do
     tree = owned_comments_tree("{}")
     tree.root.as(KYAML::Owned::Mapping).tail << KYAML::Comment.new(" tail", 1, 1)
 
-    owned_comments_render(tree).should eq("---\n{\n  # tail\n}\n")
+    owned_comments_render(tree).should eq(<<-KYAML)
+      ---
+      {
+        # tail
+      }
+
+      KYAML
   end
 
   it "writes several trailing comments in the order they were added" do
@@ -167,7 +173,14 @@ describe "storing and writing out 'owned' comments" do
 
     output = owned_comments_render(tree)
 
-    output.should eq("---\n{\n  a: 1, # first\n  # second\n}\n")
+    output.should eq(<<-KYAML)
+      ---
+      {
+        a: 1, # first
+        # second
+      }
+
+      KYAML
     tree.comments.map(&.text).should eq([" first", " second"])
     KYAML.parse_doc(output).comments.map(&.text).should eq([" first", " second"])
   end

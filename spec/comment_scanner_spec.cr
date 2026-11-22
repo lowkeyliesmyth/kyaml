@@ -3,7 +3,12 @@ require "./spec_helper"
 describe KYAML::CommentScanner do
   describe "#scan" do
     it "finds a comment above a key and records where it starts" do
-      comments = KYAML::CommentScanner.scan("# describes foo\nfoo: bar\n")
+      input = <<-YAML
+        # describes foo
+        foo: bar
+
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" describes foo")
       comments[0].line.should eq(1)
@@ -19,7 +24,15 @@ describe KYAML::CommentScanner do
     end
 
     it "finds a comment between list items on its own line" do
-      comments = KYAML::CommentScanner.scan("[\n 1,\n # in between\n 2,\n]\n")
+      input = <<-YAML
+        [
+         1,
+         # in between
+         2,
+        ]
+
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" in between")
       comments[0].line.should eq(3)
@@ -27,7 +40,13 @@ describe KYAML::CommentScanner do
     end
 
     it "finds a comment before ---" do
-      comments = KYAML::CommentScanner.scan("# header\n---\nfoo: 1\n")
+      input = <<-YAML
+        # header
+        ---
+        foo: 1
+
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" header")
       comments[0].line.should eq(1)
@@ -38,14 +57,24 @@ describe KYAML::CommentScanner do
     end
 
     it "finds comments in the order they appear" do
-      input = "# one\nfoo: 1  # two\n# three\nbar: 2\n"
+      input = <<-YAML
+        # one
+        foo: 1  # two
+        # three
+        bar: 2
+
+        YAML
       comments = KYAML::CommentScanner.scan(input)
       comments.map(&.text).should eq([" one", " two", " three"])
       comments.map(&.line).should eq([1, 2, 3])
     end
 
     it "finds a comment at the end of input with no trailing newline" do
-      comments = KYAML::CommentScanner.scan("foo: 1\n# tail comment")
+      input = <<-YAML
+        foo: 1
+        # tail comment
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" tail comment")
       comments[0].line.should eq(2)
@@ -53,7 +82,12 @@ describe KYAML::CommentScanner do
     end
 
     it "returns nothing when the input has no comments" do
-      KYAML::CommentScanner.scan("foo: bar\nbaz: qux\n").should be_empty
+      input = <<-YAML
+        foo: bar
+        baz: qux
+
+        YAML
+      KYAML::CommentScanner.scan(input).should be_empty
     end
 
     it "returns nothing for empty input" do
@@ -61,19 +95,34 @@ describe KYAML::CommentScanner do
     end
 
     it "finds a comment inside a list" do
-      comments = KYAML::CommentScanner.scan("[1, 2, # midstream\n 3]\n")
+      input = <<-YAML
+        [1, 2, # midstream
+         3]
+
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" midstream")
     end
 
     it "finds a comment inside a map" do
-      comments = KYAML::CommentScanner.scan("foo: {bar: # comment\n baz: qux}\n")
+      input = <<-YAML
+        foo: {bar: # comment
+         baz: qux}
+
+        YAML
+      comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(1)
       comments[0].text.should eq(" comment")
     end
 
     it "finds both comments in a nested flow collection" do
-      input = "{outer: [\n # nested comment\n 1, 2,\n], tail: 3 # outer comment"
+      input = <<-YAML
+        {outer: [
+         # nested comment
+         1, 2,
+        ], tail: 3 # outer comment
+        YAML
       comments = KYAML::CommentScanner.scan(input)
       comments.size.should eq(2)
       comments[0].text.should eq(" nested comment")
@@ -103,7 +152,12 @@ describe KYAML::CommentScanner do
       end
 
       it "counts lines correctly when a quoted string spans lines" do
-        comments = KYAML::CommentScanner.scan("foo: 'a\nnb'\n# after\n")
+        comments = KYAML::CommentScanner.scan(<<-YAML)
+          foo: 'a
+          nb'
+          # after
+
+          YAML
         comments.size.should eq(1)
         comments[0].text.should eq(" after")
         comments[0].line.should eq(3)
@@ -168,7 +222,11 @@ describe KYAML::CommentScanner do
       end
 
       it "ends a block scalar correctly in a list inside a list" do
-        input = "- - key: |\n    body\n- next: 2 # tail"
+        input = <<-YAML
+          - - key: |
+              body
+          - next: 2 # tail
+          YAML
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
         comments[0].text.should eq(" tail")
@@ -176,26 +234,48 @@ describe KYAML::CommentScanner do
 
       it "treats a `-` as an empty list item" do
         # `-\n` is an empty entry, the non-empty entry owns the `|`.
-        input = "-\n- key: |\n        body\n- next: 2 # tail"
+        input = <<-YAML
+          -
+          - key: |
+                  body
+          - next: 2 # tail
+          YAML
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
         comments[0].text.should eq(" tail")
       end
 
       it "ignores a # inside a literal block" do
-        input = "foo: |\n  # not a comment\n echo hi\nbar: 2\n"
+        input = <<-YAML
+          foo: |
+            # not a comment
+           echo hi
+          bar: 2
+
+          YAML
         KYAML::CommentScanner.scan(input).should be_empty
       end
 
       it "ignores a # inside a folded block" do
-        input = "foo: >\n  # not a comment\n folded text\nbar: 2\n"
+        input = <<-YAML
+          foo: >
+            # not a comment
+           folded text
+          bar: 2
+
+          YAML
         KYAML::CommentScanner.scan(input).should be_empty
       end
 
       it "finds a comment on the line that starts a block and ignores # in the body" do
         # the `# header` shares the `|` line and must still be captured as a comment
         # the `#` in the body must be ignored
-        input = "foo: | # header\n  body # not a comment\nbar: 2\n"
+        input = <<-YAML
+          foo: | # header
+            body # not a comment
+          bar: 2
+
+          YAML
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
         comments[0].text.should eq(" header")
@@ -203,7 +283,13 @@ describe KYAML::CommentScanner do
       end
 
       it "finds a comment after a block ends" do
-        input = "foo: |\n  body\n# after block\nbar: 2\n"
+        input = <<-YAML
+          foo: |
+            body
+          # after block
+          bar: 2
+
+          YAML
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
         comments[0].text.should eq(" after block")
@@ -213,7 +299,14 @@ describe KYAML::CommentScanner do
 
       it "treats an indented # after a blank line as block content" do
         # empty line belongs to the block, indented `#` after it is still block content
-        input = "foo: |\n  line1\n\n  # still block content\nbar: 2\n"
+        input = <<-YAML
+          foo: |
+            line1
+
+            # still block content
+          bar: 2
+
+          YAML
         KYAML::CommentScanner.scan(input).should be_empty
       end
 
@@ -221,7 +314,13 @@ describe KYAML::CommentScanner do
         # oof
         # guards against the marker-column bug, where the child body is indented deeper than the parent key but shallower than the | column
         # the `#` is content but dedented trailing # is captured as a comment
-        input = "parent:\n  child: |\n    body # nope\n  sibling: 2 # yup\n"
+        input = <<-YAML
+          parent:
+            child: |
+              body # nope
+            sibling: 2 # yup
+
+          YAML
         comments = KYAML::CommentScanner.scan(input)
         comments.size.should eq(1)
         comments[0].text.should eq(" yup")
@@ -235,7 +334,11 @@ describe KYAML::CommentScanner do
       end
 
       it "reads a block that runs to the end of input" do
-        KYAML::CommentScanner.scan("foo: |\n body").should be_empty
+        input = <<-YAML
+          foo: |
+           body
+          YAML
+        KYAML::CommentScanner.scan(input).should be_empty
       end
     end
   end

@@ -1,12 +1,18 @@
 require "./spec_helper"
 
 describe KYAML::Doc do
+  nested_items = <<-YAML
+    items:
+    - name: original
+
+    YAML
+
   factories = [
     {
       name:  "owned",
       build: -> {
         KYAML::Doc.new(
-          KYAML.parse("items:\n- name: original\n"),
+          KYAML.parse(nested_items),
           [] of KYAML::Comment,
         )
       },
@@ -15,7 +21,7 @@ describe KYAML::Doc do
       name:  "hand-generated legacy",
       build: -> {
         KYAML::Doc.new(
-          KYAML.parse("items:\n- name: original\n"),
+          KYAML.parse(nested_items),
           [KYAML::Comment.new(" supplied", 4, 2)],
         )
       },
@@ -23,7 +29,11 @@ describe KYAML::Doc do
     {
       name:  "parsed legacy",
       build: -> {
-        KYAML.parse_doc("items:\n- name: original # note\n# tail")
+        KYAML.parse_doc(<<-YAML)
+          items:
+          - name: original # note
+          # tail
+          YAML
       },
     },
   ]
@@ -128,11 +138,22 @@ describe KYAML::Doc do
 
     doc.comments.should eq(comments)
     doc.clone.comments.should eq(comments)
-    doc.to_kyaml.should eq("---\n{\n  foo: 1,\n}\n")
+    doc.to_kyaml.should eq(<<-KYAML)
+      ---
+      {
+        foo: 1,
+      }
+
+      KYAML
   end
 
   it "keeps comments and their original line and column numbers when copying a parsed document" do
-    doc = KYAML.parse_doc("# header\n---\nfoo: 1 # trailing\n")
+    doc = KYAML.parse_doc(<<-YAML)
+      # header
+      ---
+      foo: 1 # trailing
+
+      YAML
     copy = doc.clone
 
     copy.comments.should eq([
@@ -140,7 +161,14 @@ describe KYAML::Doc do
       KYAML::Comment.new(" trailing", 3, 8),
     ])
 
-    copy.to_kyaml.should eq("# header\n---\n{\n  foo: 1, # trailing\n}\n")
+    copy.to_kyaml.should eq(<<-KYAML)
+      # header
+      ---
+      {
+        foo: 1, # trailing
+      }
+
+      KYAML
     doc.responds_to?(:yaml_doc).should be_false
     copy.responds_to?(:yaml_doc).should be_false
   end

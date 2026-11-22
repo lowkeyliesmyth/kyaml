@@ -2,7 +2,11 @@ require "./spec_helper"
 
 describe KYAML::SourceClone do
   it "keeps node details and styles and points aliases to the copied nodes" do
-    source = YAML::Nodes.parse("---\n{items: &items [one, \"two\"], first: *items, second: *items}\n")
+    source = YAML::Nodes.parse(<<-YAML)
+      ---
+      {items: &items [one, "two"], first: *items, second: *items}
+
+      YAML
     mapping = source.nodes.first.as(YAML::Nodes::Mapping)
     sequence = mapping.nodes[1].as(YAML::Nodes::Sequence)
     source.tag = "!document"

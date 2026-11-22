@@ -11,7 +11,12 @@ describe KYAML::Classifier do
     end
 
     it "puts a comment above --- in the header group" do
-      input = "# header\n---\nfoo: 1\n"
+      input = <<-YAML
+        # header
+        ---
+        foo: 1
+
+        YAML
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
       result = KYAML::Classifier.classify(doc, comments)
@@ -19,7 +24,12 @@ describe KYAML::Classifier do
     end
 
     it "attaches a comment above a key (leading) to that key" do
-      input = "---\n# leading\nfoo: 1\n"
+      input = <<-YAML
+        ---
+        # leading
+        foo: 1
+
+        YAML
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
       result = KYAML::Classifier.classify(doc, comments)
@@ -39,7 +49,15 @@ describe KYAML::Classifier do
     it "moves a less-indented comment out of a nested map to the next root key" do
       # comment falls within outer's end_line (according to libyaml), but its column is shallower than outer's child's indent.
       # So per the behavior we've defined in kyaml, it should attach as Leading on baz at the root and not Tail of outer (which should be empty)
-      input = "---\nouter:\n  foo: 1\n  bar: 2\n# what about me?\nbaz: 3\n"
+      input = <<-YAML
+        ---
+        outer:
+          foo: 1
+          bar: 2
+        # what about me?
+        baz: 3
+
+        YAML
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
       result = KYAML::Classifier.classify(doc, comments)
@@ -51,7 +69,13 @@ describe KYAML::Classifier do
     end
 
     it "keeps a comment inside a nested map when it lines up with that map's entries" do
-      input = "outer:\n  foo: 1\n  # inside\n  bar: 2\n"
+      input = <<-YAML
+        outer:
+          foo: 1
+          # inside
+          bar: 2
+
+        YAML
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
       result = KYAML::Classifier.classify(doc, comments)
@@ -61,7 +85,12 @@ describe KYAML::Classifier do
     end
 
     it "marks each map that contains a comment anywhere inside it" do
-      input = "outer:\n  foo: 1 # x\n  bar: 2\n"
+      input = <<-YAML
+        outer:
+          foo: 1 # x
+          bar: 2
+
+        YAML
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
       result = KYAML::Classifier.classify(doc, comments)

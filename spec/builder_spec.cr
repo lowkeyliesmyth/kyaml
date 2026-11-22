@@ -60,7 +60,14 @@ describe "KYAML::Builder" do
         blt.mapping { blt.field "a", 1 }
       end
     end
-    built.should eq("---\n{\n  a: 1,\n}\n")
+    expected = <<-KYAML
+      ---
+      {
+        a: 1,
+      }
+
+      KYAML
+    built.should eq(expected)
   end
 
   it "raises when a map has a value without a key" do

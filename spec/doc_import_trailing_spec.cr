@@ -142,11 +142,22 @@ describe "comments on the same line as map entries" do
   it "fallback the entire doc to legacy when the later comment can't be placed" do
     cases = [
       {
-        "outer: # gap\n  {a: 1, b: # implicit\n  }\n",
+        <<-YAML,
+          outer: # gap
+            {a: 1, b: # implicit
+            }
+
+          YAML
         [" gap", " implicit"],
       },
       {
-        "outer: # gap\n  a: 1\n  b: | # block\n    text\n",
+        <<-YAML,
+          outer: # gap
+            a: 1
+            b: | # block
+              text
+
+          YAML
         [" gap", " block"],
       },
     ]

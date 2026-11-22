@@ -3,7 +3,12 @@ require "./spec_helper"
 describe "KYAML" do
   describe "#parse" do
     it "returns the values without any comment data" do
-      any = KYAML.parse("# comment\nfoo: bar\n")
+      yaml = <<-YAML
+        # comment
+        foo: bar
+
+        YAML
+      any = KYAML.parse(yaml)
       any.should be_a(KYAML::Any)
       any["foo"].as_s.should eq("bar")
     end
@@ -200,7 +205,13 @@ describe "KYAML" do
   describe "#parse_all" do
     context "yielding each doc" do
       it "yields each doc in a stream" do
-        yaml = "---\nfoo: 1\n---\nbar: 2\n"
+        yaml = <<-YAML
+          ---
+          foo: 1
+          ---
+          bar: 2
+
+          YAML
         docs = [] of KYAML::Any
         KYAML.parse_all(yaml) do |doc|
           docs << doc
@@ -225,7 +236,13 @@ describe "KYAML" do
 
     context "returning a list" do
       it "returns every document as a list" do
-        yaml = "---\nfoo: 1\n---\nbar: 2\n"
+        yaml = <<-YAML
+          ---
+          foo: 1
+          ---
+          bar: 2
+
+          YAML
         docs = KYAML.parse_all(yaml)
         docs.size.should eq(2)
         docs[0]["foo"].as_i.should eq(1)
@@ -246,8 +263,13 @@ describe "KYAML" do
     end
 
     it "applies strict mode" do
+      yaml = <<-YAML
+        foo: bar
+        baz: qux
+
+        YAML
       expect_raises(KYAML::BlockStyleError) do
-        KYAML.parse_doc("foo: bar\nbaz: qux\n", strict: true)
+        KYAML.parse_doc(yaml, strict: true)
       end
     end
 
@@ -258,7 +280,12 @@ describe "KYAML" do
     end
 
     it "records a comment above a key with its line and column" do
-      doc = KYAML.parse_doc("# title\nfoo: bar\n")
+      yaml = <<-YAML
+        # title
+        foo: bar
+
+        YAML
+      doc = KYAML.parse_doc(yaml)
       doc.root["foo"].as_s.should eq("bar")
       doc.comments.map(&.text).should eq([" title"])
       doc.comments[0].line.should eq(1)
@@ -273,20 +300,42 @@ describe "KYAML" do
     end
 
     it "records a comment between list items" do
-      doc = KYAML.parse_doc("[\n 1,\n # mid\n 2,\n]\n")
+      yaml = <<-YAML
+        [
+         1,
+         # mid
+         2,
+        ]
+
+        YAML
+      doc = KYAML.parse_doc(yaml)
       doc.comments.map(&.text).should eq([" mid"])
     end
 
     it "records a comment before ---" do
-      doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
+      yaml = <<-YAML
+        # header
+        ---
+        foo: 1
+
+        YAML
+      doc = KYAML.parse_doc(yaml)
       doc.comments.map(&.text).should eq([" header"])
     end
   end
 
   describe "#parse_all_docs" do
     it "gives each doc the comments before the next ---" do
-      yaml = "# header for doc 0\n---\nfoo: 1 # trailing 0\n# between\n---\n# leading doc 1\nbar: 2\n"
+      yaml = <<-YAML
+        # header for doc 0
+        ---
+        foo: 1 # trailing 0
+        # between
+        ---
+        # leading doc 1
+        bar: 2
 
+        YAML
       docs = KYAML.parse_all_docs(yaml)
       docs.size.should eq(2)
       docs[0].comments.map(&.text).should eq([" header for doc 0", " trailing 0", " between"])
@@ -294,7 +343,14 @@ describe "KYAML" do
     end
 
     it "returns one doc object per doc in the input" do
-      docs = KYAML.parse_all_docs("---\nfoo: 1\n---\nbar: 2\n")
+      yaml = <<-YAML
+        ---
+        foo: 1
+        ---
+        bar: 2
+
+        YAML
+      docs = KYAML.parse_all_docs(yaml)
       docs.size.should eq(2)
       docs[0].root["foo"].as_i.should eq(1)
       docs[1].root["bar"].as_i.should eq(2)
@@ -304,7 +360,13 @@ describe "KYAML" do
     end
 
     it "yields one doc object per doc when given a block" do
-      yaml = "---\nfoo: 1\n---\nbar: 2\n"
+      yaml = <<-YAML
+        ---
+        foo: 1
+        ---
+        bar: 2
+
+        YAML
       docs = [] of KYAML::Doc
       KYAML.parse_all_docs(yaml) do |doc|
         docs << doc
@@ -324,13 +386,25 @@ describe "KYAML" do
 
     it "yields nothing when the input has only comments" do
       yielded = 0
-      KYAML.parse_all_docs("\n# only a comment\n# another comment") { |_| yielded += 1 }
+      yaml = <<-YAML
+
+        # only a comment
+        # another comment
+        YAML
+      KYAML.parse_all_docs(yaml) { |_| yielded += 1 }
       yielded.should eq(0)
     end
 
     it "applies strict mode to every doc" do
+      yaml = <<-YAML
+        ---
+        a: 1
+        ---
+        b: 2
+
+        YAML
       expect_raises(KYAML::BlockStyleError) do
-        KYAML.parse_all_docs("---\na: 1\n---\nb: 2\n", strict: true)
+        KYAML.parse_all_docs(yaml, strict: true)
       end
     end
   end

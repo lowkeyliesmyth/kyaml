@@ -27,7 +27,13 @@ end
 
 describe "KYAML::Serializable (to_kyaml)" do
   it "writes a struct with no nested fields as a map" do
-    Point.new(1, 2).to_kyaml.should eq("{\n  x: 1,\n  y: 2,\n}")
+    expected = <<-KYAML
+      {
+        x: 1,
+        y: 2,
+      }
+      KYAML
+    Point.new(1, 2).to_kyaml.should eq(expected)
   end
 
   it "writes a field under its configured key and leaves out fields marked to be ignored" do
