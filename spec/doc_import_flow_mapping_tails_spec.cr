@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed flow mapping tails" do
-  it "keeps ordered tail comments inside the mapping and pops a key-gap comment above its entry" do
+describe "comments at the end of parsed flow maps" do
+  it "keeps comments at the end of the map in order and moves the comment after the key to above the key" do
     input = <<-YAML
       outer: # gap
         {
@@ -39,7 +39,7 @@ describe "parsed flow mapping tails" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "preserves a tail inside an empty root mapping" do
+  it "keeps a comment inside an empty root map" do
     doc = KYAML.parse_doc(<<-YAML)
       {
         # empty
@@ -59,7 +59,7 @@ describe "parsed flow mapping tails" do
     doc.clone.to_kyaml.should eq(expected)
   end
 
-  it "keeps an empty mapping's tail inside its sequence elements without disabling cuddling" do
+  it "keeps a comment inside an empty map and puts its closing brace beside the next map's opening brace" do
     doc = KYAML.parse_doc(<<-YAML)
       - {
           # empty
@@ -82,7 +82,7 @@ describe "parsed flow mapping tails" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "imports a leading comment before the next flow entry and keeps the final tail on the mapping" do
+  it "keeps a comment above a later key and the last comment inside the map" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         {

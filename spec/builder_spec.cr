@@ -1,10 +1,10 @@
 require "./spec_helper"
 describe "KYAML::Builder" do
-  it "builds a root scalar identical to the emitter" do
+  it "builds a single value that matches the emitter's output" do
     KYAML.build(&.scalar(42)).should eq(KYAML.emit(42))
   end
 
-  it "builds a mapping identical to the emitter" do
+  it "builds a map that matches the emitter's output" do
     built = KYAML.build do |blt|
       blt.mapping do
         blt.field "name", "foo"
@@ -14,7 +14,7 @@ describe "KYAML::Builder" do
     built.should eq(KYAML.emit({"name" => "foo", "port" => 80}))
   end
 
-  it "builds a nested structure via field blocks" do
+  it "builds nested maps and lists with field blocks" do
     built = KYAML.build do |blt|
       blt.mapping do
         blt.field "meta" do
@@ -34,7 +34,7 @@ describe "KYAML::Builder" do
     }))
   end
 
-  it "cuddles a sequence of mappings identically to the emitter" do
+  it "cuddles neighboring maps on the same line that the emitter does" do
     built = KYAML.build do |blt|
       blt.sequence do
         blt.mapping { blt.field "port", 80 }
@@ -44,17 +44,17 @@ describe "KYAML::Builder" do
     built.should eq(KYAML.emit([{"port" => 80}, {"port" => 443}]))
   end
 
-  it "renders empty collections" do
+  it "writes an empty map and an empty list" do
     KYAML.build { |blt| blt.mapping { } }.should eq("{}")
     KYAML.build { |blt| blt.sequence { } }.should eq("[]")
   end
 
-  it "passes a whole array as a field value without blocks" do
+  it "takes a whole list as a field value without a block" do
     built = KYAML.build { |blt| blt.mapping { blt.field "xs", [1, 2, 3] } }
     built.should eq(KYAML.emit({"xs" => [1, 2, 3]}))
   end
 
-  it "wraps a doc with `---` and trailing newline" do
+  it "wraps a document with --- and a trailing newline" do
     built = KYAML.build do |blt|
       blt.document do
         blt.mapping { blt.field "a", 1 }
@@ -63,7 +63,7 @@ describe "KYAML::Builder" do
     built.should eq("---\n{\n  a: 1,\n}\n")
   end
 
-  it "raises when a mapping field has no key" do
+  it "raises when a map has a value without a key" do
     expect_raises(KYAML::EmitError, /field key/) do
       KYAML.build { |blt| blt.mapping { blt.scalar(1) } }
     end

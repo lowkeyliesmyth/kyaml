@@ -26,24 +26,24 @@ private struct Account
 end
 
 describe "KYAML::Serializable (to_kyaml)" do
-  it "serializes a flat struct" do
+  it "writes a struct with no nested fields as a map" do
     Point.new(1, 2).to_kyaml.should eq("{\n  x: 1,\n  y: 2,\n}")
   end
 
-  it "renames via @[KYAML::Field(key:)] and skips ignored fields" do
+  it "writes a field under its configured key and leaves out fields marked to be ignored" do
     out = Account.new("Ada", 36, [] of String, Point.new(1, 2)).to_kyaml
     out.should contain(%(full_name: "Ada"))
     out.should_not contain("secret")
   end
 
-  it "skips nil fields by default and emits set ones" do
+  it "writes a field when it has a value and leaves it out when it is nil" do
     Account.new("Ada", 36, [] of String, Point.new(0, 0)).to_kyaml
       .should_not contain("nickname")
     Account.new("Ada", 36, ["foo", "bar"], Point.new(0, 0), "The GOAT").to_kyaml
       .should contain(%(nickname: "The GOAT"))
   end
 
-  it "nests structs and collections in declared order" do
+  it "writes fields in the order they are declared, including nested maps and lists" do
     kyaml = <<-KYAML
       {
         full_name: "Ada",
@@ -64,13 +64,13 @@ describe "KYAML::Serializable (to_kyaml)" do
 end
 
 describe "KYAML::Serializable (from_kyaml)" do
-  it "deserializes a flat struct" do
+  it "reads the keys of a map into the fields of a struct" do
     pt = Point.from_kyaml("{ x: 3, y: 4 }")
     pt.x.should eq(3)
     pt.y.should eq(4)
   end
 
-  it "honors rename, nested structs, collections, ignored-field defaults, and nilable fields" do
+  it "reads renamed keys and nested values, keeps ignored defaults, and leaves missing optional values as nil" do
     acct = Account.from_kyaml(%({ full_name: "Ada", age: 36, tags: ["a", "b"], home: { x: 1, y: 2 } }))
     acct.name.should eq("Ada")
     acct.age.should eq(36)
@@ -80,17 +80,17 @@ describe "KYAML::Serializable (from_kyaml)" do
     acct.nickname.should be_nil # missing nillable -> nil
   end
 
-  it "raises on a missing required field" do
+  it "raises an error when a required field is missing" do
     expect_raises(KYAML::ParseError, /missing required/) do
       Account.from_kyaml(%({ full_name: "Ada", tags: [], home: { x: 0, y: 0}}))
     end
   end
 
-  it "tolerates unknown keys in lenient mode" do
+  it "ignores unknown keys by default in lenient mode" do
     Point.from_kyaml("{ x: 1, y : 2, extra: 99}").x.should eq(1)
   end
 
-  it "round-trips through to_kyaml -> from_kyaml" do
+  it "writes the same KYAML across roundtrips" do
     acct = Account.new("Ada", 36, ["a", "b"], Point.new(1, 2), "The GOAT")
     Account.from_kyaml(acct.to_kyaml).to_kyaml.should eq(acct.to_kyaml)
   end
@@ -104,13 +104,13 @@ private struct StrictPoint
 end
 
 describe "KYAML::Serializable::Strict" do
-  it "raises on an unknown attribute" do
+  it "raises an error when the input contains an unknown key" do
     expect_raises(KYAML::ParseError, /unknown KYAML attribute: extra/) do
       StrictPoint.from_kyaml("{ x: 1, y: 2, extra: 99 }")
     end
   end
 
-  it "deserializes normally when every key is known" do
+  it "reads the struct when every key is known" do
     StrictPoint.from_kyaml("{ x: 1, y: 2 }").x.should eq(1)
   end
 end
@@ -122,14 +122,14 @@ private struct LenientBag
 end
 
 describe "KYAML::Serializable::Unmapped" do
-  it "captures unknown atributes into kyaml_unmapped" do
+  it "stores unknown keys and their values separately from known fields" do
     bag = LenientBag.from_kyaml(%({ name: "Ada", extra: 99, note: "hi" }))
     bag.name.should eq("Ada")
     bag.kyaml_unmapped["extra"].should eq(99)
     bag.kyaml_unmapped["note"].should eq("hi")
   end
 
-  it "leaves kyaml_unmapped empty when there are no extras" do
+  it "leaves the map of unknown keys empty when every key is known" do
     LenientBag.from_kyaml(%({ name: "Ada" })).kyaml_unmapped.empty?.should be_true
   end
 end
@@ -145,8 +145,8 @@ private struct NullableEmit
   end
 end
 
-describe "KYAML::Serializable (emit_null)" do
-  it "emits a nil field as null only when emit_null annotation is set" do
+describe "KYAML::Serializable (writing null for one field)" do
+  it "writes a nil field as null only when that field is configured to appear" do
     out = NullableEmit.new.to_kyaml
     out.should contain("mid: null")
     out.should_not contain("tail")
@@ -166,7 +166,7 @@ private struct Probe
   end
 end
 
-describe "KYAML::Serializable (presence)" do
+describe "KYAML::Serializable (checking whether keys appear)" do
   it "reports a tracked key as present when it appears" do
     Probe.from_kyaml(%({ note: "hi", count: 1})).kyaml_present?("note").should be_true
   end
@@ -180,13 +180,13 @@ describe "KYAML::Serializable (presence)" do
   # There is a semantic difference between an explicit null and an absent key, especially when trying to differentiate between if we're modifying a program-controlled default value or a user-specified override value.
   #
   # The value is the same, but the _intent_ behind it is different. Presence is only meaningful for **nilable or defaulted** fields, because those are the cases where the value alone cannot tell you intent.
-  it "differentiates between an explicit null and just an absent key" do
+  it "reports a key as present when its value is explicitly null" do
     p = Probe.from_kyaml(%({ note: null, count: 1}))
     p.note.should be_nil
     p.kyaml_present?("note").should be_true
   end
 
-  it "differentiates between an explicit null and just an absent key on renamed fields" do
+  it "reports a renamed key as present when its value is explicitly null" do
     p = Probe.from_kyaml(%({ note: null, count: 1, full_name: null}))
     p.name.should be_nil
     p.kyaml_present?("full_name").should be_true
@@ -199,8 +199,8 @@ private struct Defaulted
   property retries : Int32 = 3
 end
 
-describe "KYAML::Serializable (defaulted field)" do
-  it "falls back to a non-ignored field's default when the key is omitted" do
+describe "KYAML::Serializable (default field values)" do
+  it "uses the field's default value when the key is missing" do
     dft = Defaulted.from_kyaml(%({ name: "foo"}))
     dft.name.should eq("foo")
     dft.retries.should eq(3)
@@ -233,8 +233,8 @@ private struct Event
   end
 end
 
-describe "KYAML::Serializable (converter)" do
-  it "round-trips a field through a custom converter" do
+describe "KYAML::Serializable (custom field conversion)" do
+  it "writes a time as Unix seconds and reads it back as the same time" do
     t = Time.unix(1_700_000_000)
     kyaml = Event.new("deploy", t).to_kyaml
     kyaml.should contain("at: 1700000000")
@@ -259,7 +259,7 @@ private struct Derived
 end
 
 describe "KYAML::Serializable (after_initialize)" do
-  it "runs after_initialize once every field is assigned" do
+  it "runs the setup method after the fields have been filled in" do
     Derived.from_kyaml(%({ name: "ada"})).shout.should eq("ADA")
   end
 end
@@ -279,19 +279,19 @@ private class DiscRectangle < DiscShape
   property height : Float64
 end
 
-describe "KYAML::Serializable (use_kyaml_descriminator)" do
-  it "deserializes into the subtype named by the discriminator" do
+describe "KYAML::Serializable (choosing a type from a key's value)" do
+  it "reads a circle when the kind is 'circle'" do
     shape = DiscShape.from_kyaml(%({ kind: "circle", radius: 2.5 }))
     shape.should be_a(DiscCircle)
     shape.as(DiscCircle).radius.should eq(2.5)
   end
 
-  it "dispatches to a different subtype by discriminator value" do
+  it "reads a rectangle when the kind is 'rectangle'" do
     shape = DiscShape.from_kyaml(%({ kind: "rectangle", width: 3.0, height: 4.0 }))
     shape.as(DiscRectangle).height.should eq(4.0)
   end
 
-  it "raises on an unknown discriminator value" do
+  it "raises an error when the kind does not name a supported shape" do
     expect_raises(KYAML::ParseError, /unknown KYAML discriminator/) do
       DiscShape.from_kyaml(%({ kind: "triangle" }))
     end
@@ -308,8 +308,8 @@ private struct EmitAllNulls
   end
 end
 
-describe "KYAML::Serializable (Options emit_nulls)" do
-  it "emits every nilable field as null when the type opts in" do
+describe "KYAML::Serializable (writing null for all unset fields)" do
+  it "writes all nil fields as null when the type is configured to include them" do
     out = EmitAllNulls.new.to_kyaml
     out.should contain("a: null")
     out.should contain("b: null")
@@ -325,8 +325,8 @@ private struct Bag
   end
 end
 
-describe "KYAML::Serializable::Unmapped (round-trip re-emit)" do
-  it "round-trips captured unknown keys, includes nested structures" do
+describe "KYAML::Serializable::Unmapped (writing unknown keys back out)" do
+  it "keeps unknown keys and their nested values after writing and reading them back" do
     bag = Bag.from_kyaml(%({ name: "ada", extra: 67, nested: { a: 1}}))
     bagout = bag.to_kyaml
     bagout.should contain(%(name: "ada"))

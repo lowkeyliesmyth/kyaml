@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed mapping-entry trailing comments" do
-  it "imports trailing comments on scalar values" do
+describe "comments on the same line as map entries" do
+  it "keeps a comment on the same line as simple values" do
     doc = KYAML.parse_doc(<<-YAML)
       a: 1 # one
       b: true # two
@@ -39,7 +39,7 @@ describe "parsed mapping-entry trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "distinguishes comments inside and after flow-type collection values" do
+  it "keeps a comment inside a nested map or list separate from a comment after its closing bracket" do
     doc = KYAML.parse_doc(<<-YAML)
       a: {b: 1 # inner
       } # outer
@@ -72,7 +72,7 @@ describe "parsed mapping-entry trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "assigns a shared-line comment to the last entry" do
+  it "keeps a comment after the last entry of a map written on one line" do
     doc = KYAML.parse_doc(<<-YAML)
       {a: 1, b: 2 # note
       }
@@ -92,7 +92,7 @@ describe "parsed mapping-entry trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "preserves gap-comment ownership to keys when an inner trailing comment is also present" do
+  it "keeps a comment after a key above that key even when its value also has a comment on its line" do
     doc = KYAML.parse_doc(<<-YAML)
       a: # gap
         b: 1 # trail
@@ -118,7 +118,7 @@ describe "parsed mapping-entry trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps cuddling enabled when a container descendant entry owns a trailing comment" do
+  it "keeps cuddling enabled when a comment follows an entry inside a map" do
     doc = KYAML.parse_doc(<<-YAML)
       - a: 1 # note
       - b: 2
@@ -139,7 +139,7 @@ describe "parsed mapping-entry trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "fallback the entire doc to legacy when a trailing comment placement is unhandled" do
+  it "fallback the entire doc to legacy when the later comment can't be placed" do
     cases = [
       {
         "outer: # gap\n  {a: 1, b: # implicit\n  }\n",

@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed flow sequence element trailing comments" do
-  it "attaches a comment to the last element on a shared line" do
+describe "comments on the same line as items of a parsed flow list" do
+  it "keeps a comment on the same line as the item it follows" do
     doc = KYAML.parse_doc(<<-YAML)
       [1, 1, # second
         1 # third
@@ -27,7 +27,7 @@ describe "parsed flow sequence element trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "separates a mapping entry comment from a comment after the closing brace" do
+  it "keeps a comment inside a map separate from a comment after the closing brace" do
     doc = KYAML.parse_doc(<<-YAML)
       [
         {a: 1 # entry
@@ -56,7 +56,7 @@ describe "parsed flow sequence element trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "separates an inner sequence comment from a comment after its closing bracket" do
+  it "keeps a comment inside a nested list separate from a comment after the closing bracket" do
     doc = KYAML.parse_doc(<<-YAML)
       [
         [1, # inner
@@ -85,7 +85,7 @@ describe "parsed flow sequence element trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "does not attach a comment after the root closing bracket to the last element" do
+  it "keeps a comment after the last closing bracket out of the item and out of the output" do
     doc = KYAML.parse_doc(<<-YAML)
       [
         {a: 1},

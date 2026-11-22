@@ -45,8 +45,8 @@ private def owned_comments_fixture : KYAML::Owned::Tree
   tree
 end
 
-describe "owned comment storage and rendering" do
-  it "snapshots comments in emission order and preserving source doc coordinates" do
+describe "storing and writing out 'owned' comments" do
+  it "lists comments in output order with their original line and column numbers" do
     tree = owned_comments_fixture
     comments = tree.comments
 
@@ -55,7 +55,7 @@ describe "owned comment storage and rendering" do
     comments.map(&.column).should eq((0...10).map { |index| index + 1 })
   end
 
-  it "returns detached snapshots and clones every comment slot" do
+  it "keeps the original comments when the returned list or a copy's comments are cleared" do
     tree = owned_comments_fixture
     expected = tree.comments
     snapshot = tree.comments
@@ -77,7 +77,7 @@ describe "owned comment storage and rendering" do
     tree.comments.should eq(expected)
   end
 
-  it "renders every comment owner category in the same order as the comment snapshot" do
+  it "writes every kind of comment in the same order as the comment list" do
     tree = owned_comments_fixture
     expected = [
       "# c0",
@@ -109,7 +109,7 @@ describe "owned comment storage and rendering" do
     end
   end
 
-  it "blocks cuddling for direct leading, direct trailing, and sequence-tail type comments" do
+  it "keeps list items uncuddled when the list itself or its items have comments" do
     ["leading", "trailing", "tail"].each do |placement|
       tree = owned_comments_tree(%([{"a": 1}, {"a": 2}]))
       sequence = tree.root.as(KYAML::Owned::Sequence)
@@ -132,7 +132,7 @@ describe "owned comment storage and rendering" do
     end
   end
 
-  it "keeps cuddling enabled when comments only belong to descendants" do
+  it "keeps comments cuddled when they belong to entries inside the maps" do
     tree = owned_comments_tree(%([{"a": 1}, {"a": 2}]))
     sequence = tree.root.as(KYAML::Owned::Sequence)
     mapping = sequence.elements.first.value.as(KYAML::Owned::Mapping)
@@ -152,14 +152,14 @@ describe "owned comment storage and rendering" do
     owned_comments_render(tree).should eq(expected)
   end
 
-  it "renders tails inside empty mappings" do
+  it "writes a trailing comment inside an empty map" do
     tree = owned_comments_tree("{}")
     tree.root.as(KYAML::Owned::Mapping).tail << KYAML::Comment.new(" tail", 1, 1)
 
     owned_comments_render(tree).should eq("---\n{\n  # tail\n}\n")
   end
 
-  it "preserves multiple trailing comments in array order" do
+  it "writes several trailing comments in the order they were added" do
     tree = owned_comments_tree(%({"a": 1}))
     entry = tree.root.as(KYAML::Owned::Mapping).entries.first
     entry.trailing << KYAML::Comment.new(" first", 4, 1)
@@ -172,7 +172,7 @@ describe "owned comment storage and rendering" do
     KYAML.parse_doc(output).comments.map(&.text).should eq([" first", " second"])
   end
 
-  it "retains empty-sequence tails but rejects rendering instead of dropping them" do
+  it "keeps a trailing comment on an empty list and raises instead of dropping it when writing" do
     tree = owned_comments_tree("[]")
     sequence = tree.root.as(KYAML::Owned::Sequence)
     sequence.tail << KYAML::Comment.new(" tail", 1, 1)

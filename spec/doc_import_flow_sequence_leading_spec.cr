@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed flow sequence element leading comments" do
-  it "keeps stacked comments on the first item and keeps separate comments on later items at the same depth" do
+describe "comments before items of a parsed flow list" do
+  it "keeps comments above the first item and a separate comment above the second item at the same level" do
     doc = KYAML.parse_doc(<<-YAML)
       [
         # first
@@ -42,7 +42,7 @@ describe "parsed flow sequence element leading comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps an inner leading comment separate from a comment before the next item in the outer sequence" do
+  it "keeps a comment above an item in a nested list separate from a comment above the next item in the outer list" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         [
@@ -81,7 +81,7 @@ describe "parsed flow sequence element leading comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "imports leading and trailing comments on the same flow sequence element" do
+  it "keeps a comment above an item and a comment on the same line as that item" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         [

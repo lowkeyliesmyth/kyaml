@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed block mapping ownership" do
-  it "keeps nested tails, sibling-leading comments, and the root tail separate and unique" do
+describe "comments inside parsed block maps" do
+  it "keeps a comment inside a nested map, a comment above the next key, and a comment at the end of the root map" do
     doc = KYAML.parse_doc(<<-YAML)
       outer:
         a: 1
@@ -33,7 +33,7 @@ describe "parsed block mapping ownership" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps the first entry's leading comments distinct and separate from the document header" do
+  it "keeps comments above the first key after the header instead of merging them into the header" do
     doc = KYAML.parse_doc(<<-YAML)
       # header
       ---
@@ -55,7 +55,7 @@ describe "parsed block mapping ownership" do
     doc.comments.map(&.line).should eq([1, 3, 4])
   end
 
-  it "does not import a comment as a mapping tail after an explicit doc end" do
+  it "records a comment after the end marker but does not write the comment on the earlier key" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         a: 1

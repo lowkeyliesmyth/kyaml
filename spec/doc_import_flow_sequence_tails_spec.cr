@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed flow sequence tails" do
-  it "keeps the comments after the last sequence item in order and expands mappings that could otherwise be cuddled" do
+describe "comments at the end of parsed flow lists" do
+  it "keeps comments after the last item in order and writes each map on its own lines" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         [
@@ -43,7 +43,7 @@ describe "parsed flow sequence tails" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "tells apart the tail comment after the last item of a nested sequence from the tail comment after the last item of the outer sequence" do
+  it "keeps a comment after the last item of a nested list separate from a comment after the last item of the outer list" do
     doc = KYAML.parse_doc(<<-YAML)
       [
         [1,
@@ -73,7 +73,7 @@ describe "parsed flow sequence tails" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "falls back to the legacy behavior for an empty flow sequence with a comment inside it" do
+  it "keeps the comment available but leaves it out of the output for an empty list with a comment inside" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         [
@@ -90,7 +90,7 @@ describe "parsed flow sequence tails" do
     doc.clone.to_kyaml.should eq(doc.to_kyaml)
   end
 
-  it "assigns a comment before a later element to that element and preserves the sequence tail" do
+  it "keeps a comment above a later item and a comment after the last item" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         [

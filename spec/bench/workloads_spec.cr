@@ -90,7 +90,7 @@ describe KYAMLBench::Workloads do
   workloads.each do |wload|
     name = wload[:name]
 
-    it "parses the #{name} workload with complete expected value and comments" do
+    it "reads all expected values and comments from the #{name} workload" do
       doc = KYAML.parse_doc(wload[:input])
 
       doc.root.should eq(wload[:root])
@@ -98,7 +98,7 @@ describe KYAMLBench::Workloads do
       KYAML.parse(wload[:input]).should eq(wload[:root])
     end
 
-    it "emits the #{name} workload repeatedly without mutating values or comments" do
+    it "writes the same output each time without changing the #{name} workload's values or comments" do
       doc = KYAML.parse_doc(wload[:input])
       original_comments = doc.comments.dup
       first_output = KYAML.emit_doc(doc)
@@ -115,7 +115,7 @@ describe KYAMLBench::Workloads do
     end
   end
 
-  it "yields the requested docs through block-form stream parsing" do
+  it "passes each requested deployment document to the block when reading the stream" do
     stream = KYAMLBench::Workloads.deployment_stream(3)
     roots = [] of KYAML::Any
 
@@ -124,7 +124,7 @@ describe KYAMLBench::Workloads do
     roots.should eq([deployment_root, deployment_root, deployment_root])
   end
 
-  it "builds one doc without also adding an empty doc" do
+  it "builds a single deployment document without adding an empty one" do
     stream = KYAMLBench::Workloads.deployment_stream(1)
 
     stream.should eq(KYAMLBench::Workloads::DEPLOYMENT)
@@ -133,7 +133,7 @@ describe KYAMLBench::Workloads do
     docs.first.root.should eq(deployment_root)
   end
 
-  it "builds an empty stream that doesn't return or yield any docs" do
+  it "builds an empty stream with no documents when the requested count is zero" do
     stream = KYAMLBench::Workloads.deployment_stream(0)
 
     stream.should eq("")
@@ -144,13 +144,13 @@ describe KYAMLBench::Workloads do
     yielded.should eq(0)
   end
 
-  it "rejects a negative doc count" do
+  it "rejects a negative document count" do
     expect_raises(ArgumentError) do
       KYAMLBench::Workloads.deployment_stream(-1)
     end
   end
 
-  it "rejects malformed input through single-doc and stream parsing" do
+  it "rejects invalid YAML when reading one document or a stream of documents" do
     malformed = "{unclosed:"
 
     expect_raises(KYAML::ParseError) { KYAML.parse_doc(malformed) }

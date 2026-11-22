@@ -1,36 +1,36 @@
 require "./spec_helper"
 
 describe "KYAML::Emitter" do
-  describe "scalar rendering" do
-    it "renders integers as numeric literals" do
+  describe "writing single values" do
+    it "writes whole numbers as plain numbers" do
       KYAML.emit(42_i64).should eq("42")
       KYAML.emit(-4_i64).should eq("-4")
     end
 
-    it "renders floats as numeric literals" do
+    it "writes decimal numbers as plain numbers" do
       KYAML.emit(3.14).should eq("3.14")
     end
 
-    it "renders bools as true/false" do
+    it "writes true and false as plain words" do
       KYAML.emit(true).should eq("true")
       KYAML.emit(false).should eq("false")
     end
 
-    it "renders nil as null" do
+    it "writes nil as null" do
       KYAML.emit(nil).should eq("null")
     end
 
-    it "double quotes strings" do
+    it "puts double quotes around text" do
       KYAML.emit("hello").should eq(%("hello"))
     end
 
-    it "escapes quotes, backslashes, and other special control whitespace chars" do
+    it "escapes double quotes, backslashes, and tabs" do
       KYAML.emit(%(a"b)).should eq(%("a\\"b"))
       KYAML.emit("a\\b").should eq(%("a\\\\b"))
       KYAML.emit("a\tb").should eq(%("a\\tb"))
     end
 
-    it "raises on non-finite floats" do
+    it "raises an error for infinity and not-a-number" do
       expect_raises(KYAML::EmitError, /non-finite/) do
         KYAML.emit(Float64::INFINITY)
       end
@@ -40,35 +40,35 @@ describe "KYAML::Emitter" do
       end
     end
 
-    it "is reachable through KYAML::Any#to_kyaml" do
+    it "writes a wrapped value through to_kyaml" do
       KYAML::Any.new("x").to_kyaml.should eq(%("x"))
     end
 
-    it "escapes control characters as \\uXXXX" do
+    it "escapes control characters with a Unicode escape" do
       KYAML.emit("\u0000").should eq(%q("\u0000"))
       KYAML.emit("\u0007").should eq(%q("\u0007"))
       KYAML.emit("\u007F").should eq(%q("\u007F"))
     end
 
-    it "escapes C1 controls as \\uXXXX" do
+    it "escapes C1 control characters with a Unicode escape" do
       KYAML.emit("\u0085").should eq(%q("\u0085"))
     end
 
-    it "escapes non-ASCII Unicode BMP characters as \\uXXXX" do
+    it "escapes non-ASCII characters with four-digit Unicode escapes" do
       KYAML.emit("中").should eq(%q("\u4E2D"))
     end
 
-    it "escapes astral Unicode characters as \\UXXXXXXXX" do
+    it "escapes astral Unicod characters with eight-digit Unicode escapes" do
       KYAML.emit("😀").should eq(%q("\U0001F600"))
     end
 
-    it "leaves printable ASCII characters untouched" do
+    it "leaves printable ASCII text as is" do
       KYAML.emit("aZ0 ~!").should eq(%q("aZ0 ~!"))
     end
   end
 
-  describe "multi-line string folding" do
-    it "folds a trailing-newline multiline string and round-trips it" do
+  describe "writing text that spans lines" do
+    it "writes multi-line text with a trailing newline and reads it back" do
       result = KYAML.emit("Line one\nLine two\n")
       expected = <<-'EXP'
         "\
@@ -80,7 +80,7 @@ describe "KYAML::Emitter" do
       YAML.parse(result).as_s.should eq("Line one\nLine two\n")
     end
 
-    it "folds a multiline string with no trailing newline" do
+    it "writes multi-line text with no trailing newline" do
       result = KYAML.emit("a\nb")
       expected = <<-'EXP'
         "\
@@ -91,7 +91,7 @@ describe "KYAML::Emitter" do
       YAML.parse(result).as_s.should eq("a\nb")
     end
 
-    it "indents continuation lines one level past the mapping key" do
+    it "indents continuation lines one level past the key" do
       result = KYAML.emit({"description" => KYAML::Any.new("Line one\nLine two\n")})
       expected = <<-'EXP'
         {
@@ -105,7 +105,7 @@ describe "KYAML::Emitter" do
       YAML.parse(result)["description"].as_s.should eq("Line one\nLine two\n")
     end
 
-    it "preserves meaningful leading whitespace with a \\u0020 anchor" do
+    it "keeps leading spaces on continuation lines" do
       result = KYAML.emit("a\n  indented")
       expected = <<-'EXP'
         "\
@@ -117,12 +117,12 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "sequence rendering" do
-    it "renders an empty sequence inline" do
+  describe "writing lists" do
+    it "writes an empty list on one line" do
       KYAML.emit([] of KYAML::Any).should eq("[]")
     end
 
-    it "renders a single-element sequence as multi-line with trailing comma" do
+    it "writes a one-item list on several lines with a trailing comma" do
       kyaml = <<-KYAML
         [
           "foo",
@@ -132,7 +132,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "renders mixed scalar elements as one per line" do
+    it "puts each list item on its own line" do
       kyaml = <<-KYAML
         [
           "foo",
@@ -145,12 +145,12 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "mapping rendering" do
-    it "renders an empty mapping inline" do
+  describe "writing maps" do
+    it "writes an empty map on one line" do
       KYAML.emit({} of String => KYAML::Any).should eq("{}")
     end
 
-    it "renders a single pair with a safe unquoted key" do
+    it "leaves a plain key unquoted" do
       kyaml = <<-KYAML
         {
           foo: "bar",
@@ -160,7 +160,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(h).should eq(kyaml)
     end
 
-    it "preserves insertion order across multiple pairs" do
+    it "keeps entries in the order they were added" do
       kyaml = <<-KYAML
         {
           a: 1,
@@ -172,7 +172,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(h).should eq(kyaml)
     end
 
-    it "quotes keys that resolve as known type-ambiguous words (bool/null/number)" do
+    it "puts quotes around keys that look like booleans, null, or numbers" do
       kyaml = <<-KYAML
         {
           "true": 1,
@@ -184,7 +184,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(h).should eq(kyaml)
     end
 
-    it "quotes keys with whitespace, colons, or other unsafe chars" do
+    it "puts quotes around keys with spaces or colons" do
       kyaml = <<-KYAML
         {
           "foo bar": 1,
@@ -195,7 +195,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(h).should eq(kyaml)
     end
 
-    it "quotes Norway-bug keys regardless of case" do
+    it "puts quotes around yes/no-style keys in any case" do
       kyaml = <<-KYAML
         {
           "NO": 1,
@@ -207,7 +207,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(h).should eq(kyaml)
     end
 
-    it "indents nested mappings with two spaces per level" do
+    it "indents nested maps by two spaces per level" do
       kyaml = <<-KYAML
         {
           metadata: {
@@ -222,8 +222,8 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "cuddling" do
-    it "cuddles a sequence of mappings" do
+  describe "brackets on the same line" do
+    it "keeps the list bracket next to its map item" do
       kyaml = <<-KYAML
         [{
           port: 80,
@@ -233,7 +233,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "cuddles multiple mapping elements" do
+    it "keeps the bracket next to each map in a list" do
       kyaml = <<-KYAML
         [{
           port: 80,
@@ -248,7 +248,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "cuddles a sequence of sequences" do
+    it "keeps the bracket next to each list in a list" do
       kyaml = <<-KYAML
         [[
           1,
@@ -263,7 +263,7 @@ describe "KYAML::Emitter" do
       ]
       KYAML.emit(seq).should eq(kyaml)
     end
-    it "does not cuddle a sequence with mixed collection kinds" do
+    it "keeps a map and a list uncuddled when they share a list" do
       kyaml = <<-KYAML
         [
           {
@@ -282,7 +282,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "does not cuddle a sequence with any scalar element" do
+    it "keeps a map and a text item uncuddled" do
       kyaml = <<-KYAML
         [
           {
@@ -298,7 +298,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "does not cuddle a sequence with an empty collection" do
+    it "keeps a map and an empty map uncuddled" do
       kyaml = <<-KYAML
         [
           {
@@ -311,7 +311,7 @@ describe "KYAML::Emitter" do
       KYAML.emit(seq).should eq(kyaml)
     end
 
-    it "cuddles inside a mapping value" do
+    it "cuddles the bracket next to a map that is a value" do
       kyaml = <<-KYAML
         {
           ports: [{
@@ -331,8 +331,8 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "document rendering" do
-    it "wraps a scalar in --- and a trailing newline" do
+  describe "writing documents" do
+    it "writes --- above a single value" do
       doc = KYAML::Doc.new(KYAML::Any.new(42), [] of KYAML::Comment)
       expected = <<-KYAML
         ---
@@ -342,7 +342,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "wraps a mapping in --- and a trailing newline" do
+    it "writes --- above a map" do
       doc = KYAML::Doc.new(KYAML::Any.new({"foo" => KYAML::Any.new("bar")}), [] of KYAML::Comment)
       expected = <<-KYAML
         ---
@@ -354,7 +354,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "wraps an empty mapping" do
+    it "writes --- above an empty map" do
       doc = KYAML::Doc.new(KYAML::Any.new({} of String => KYAML::Any), [] of KYAML::Comment)
       expected = <<-KYAML
         ---
@@ -364,7 +364,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "is reachable via KYAML::Doc#.to_kyaml" do
+    it "writes a doc through to_kyaml" do
       doc = KYAML::Doc.new(KYAML::Any.new("waddup bro"), [] of KYAML::Comment)
       expected = <<-KYAML
         ---
@@ -374,7 +374,7 @@ describe "KYAML::Emitter" do
       doc.to_kyaml.should eq(expected)
     end
 
-    it "concatenates multiple docs via #emit_all_docs" do
+    it "writes several docs one after another" do
       docs = [
         KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment),
         KYAML::Doc.new(KYAML::Any.new(2), [] of KYAML::Comment),
@@ -390,8 +390,8 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "comment emission" do
-    it "renders a header comment above the `---` separator" do
+  describe "writing comments" do
+    it "writes a header comment above ---" do
       doc = KYAML.parse_doc("# header\n---\nfoo: 1\n")
       expected = <<-KYAML
         # header
@@ -404,7 +404,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "renders a leading comment above its mapping pair" do
+    it "writes a leading comment above its key" do
       doc = KYAML.parse_doc("---\n# leading\nfoo: 1\n")
       expected = <<-KYAML
         ---
@@ -417,7 +417,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "renders a trailing comment after the value's comma" do
+    it "writes a trailing comment after the value and comma" do
       doc = KYAML.parse_doc("---\nfoo: 1 # trailing\n")
       expected = <<-KYAML
         ---
@@ -429,7 +429,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "renders a tail comment before the closing brace" do
+    it "writes a tail comment before the closing brace" do
       doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n  # tail\n")
       expected = <<-KYAML
         ---
@@ -445,7 +445,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "renders a column-shallow comment above the next sibling, not inside the container" do
+    it "writes a less-indented comment above the next key, outside the nested map" do
       doc = KYAML.parse_doc("outer:\n  foo: 1\n  bar: 2\n# x\nbaz: 3\n")
       expected = <<-KYAML
         ---
@@ -462,7 +462,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "preserves line breaks across stacked leading comments" do
+    it "keeps stacked leading comments on separate lines" do
       doc = KYAML.parse_doc("---\n# line one\n# line two\nfoo: 1\n")
       expected = <<-KYAML
         ---
@@ -476,7 +476,7 @@ describe "KYAML::Emitter" do
       KYAML.emit_doc(doc).should eq(expected)
     end
 
-    it "cuddles when a sole-entry inside a sequence element has a comment" do
+    it "cuddles list brackets next to maps when one map has a comment" do
       doc = KYAML.parse_doc("items:\n- foo: 1 # note\n- foo: 2\n")
       expected = <<-KYAML
         ---
@@ -493,8 +493,8 @@ describe "KYAML::Emitter" do
     end
   end
 
-  describe "anchor, alias, and tag stripping" do
-    it "expands aliases to their anchored values, stripping anchor and alias markers (&/*)" do
+  describe "removing anchors, aliases, and tags" do
+    it "replaces an alias with the value it points to and drops & and * markers" do
       out = KYAML.emit(KYAML.parse("base: &a {x: 1}\nuse: *a\n").raw)
       out.should_not contain('&')
       out.should_not contain('*')
@@ -511,7 +511,7 @@ describe "KYAML::Emitter" do
       out.should eq(expected)
     end
 
-    it "strips tags, emitting the resolved value with no tag markers" do
+    it "drops a tag and writes the value it marked" do
       out = KYAML.emit(KYAML.parse("foo: !!str 7\n").raw)
       out.should_not contain('!')
       expected = <<-KYAML
@@ -522,7 +522,7 @@ describe "KYAML::Emitter" do
       out.should eq(expected)
     end
 
-    it "strips unknown tags, emitting just the bare scalar" do
+    it "drops an unknown tag and writes the text alone" do
       out = KYAML.emit(KYAML.parse("foo: !mytag bar\n").raw)
       out.should_not contain('!')
       expected = <<-KYAML

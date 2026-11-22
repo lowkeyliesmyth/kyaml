@@ -2,7 +2,7 @@ require "./spec_helper"
 
 describe KYAML::Classifier do
   describe "#classify" do
-    it "returns an empty result for nil doc" do
+    it "returns an empty result for a nil doc" do
       result = KYAML::Classifier.classify(nil, [] of KYAML::Comment)
       result.header.should be_empty
       result.leading.should be_empty
@@ -10,7 +10,7 @@ describe KYAML::Classifier do
       result.tail.should be_empty
     end
 
-    it "captures a header comment above ---" do
+    it "puts a comment above --- in the header group" do
       input = "# header\n---\nfoo: 1\n"
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
@@ -18,7 +18,7 @@ describe KYAML::Classifier do
       result.header.map(&.text).should eq([" header"])
     end
 
-    it "attaches a leading comment to the key node of its target pair" do
+    it "attaches a comment above a key (leading) to that key" do
       input = "---\n# leading\nfoo: 1\n"
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
@@ -27,7 +27,7 @@ describe KYAML::Classifier do
       result.leading[key_node].map(&.text).should eq([" leading"])
     end
 
-    it "attaches a trailing comment to the value node" do
+    it "attaches a comment after a value (trailing) to that value" do
       input = "foo: 1 # trailing\n"
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
@@ -36,7 +36,7 @@ describe KYAML::Classifier do
       result.trailing[value_node].text.should eq(" trailing")
     end
 
-    it "exits an inner container's scope when the comments column is shallower than its child indent" do
+    it "moves a less-indented comment out of a nested map to the next root key" do
       # comment falls within outer's end_line (according to libyaml), but its column is shallower than outer's child's indent.
       # So per the behavior we've defined in kyaml, it should attach as Leading on baz at the root and not Tail of outer (which should be empty)
       input = "---\nouter:\n  foo: 1\n  bar: 2\n# what about me?\nbaz: 3\n"
@@ -50,7 +50,7 @@ describe KYAML::Classifier do
       result.tail.has_key?(outer_val).should be_false
     end
 
-    it "stays inside an inner container when the comments column  matches its child indent" do
+    it "keeps a comment inside a nested map when it lines up with that map's entries" do
       input = "outer:\n  foo: 1\n  # inside\n  bar: 2\n"
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
@@ -60,7 +60,7 @@ describe KYAML::Classifier do
       result.leading[bar_key].map(&.text).should eq([" inside"])
     end
 
-    it "marks every container whose subtree contains an attached comment" do
+    it "marks each map that contains a comment anywhere inside it" do
       input = "outer:\n  foo: 1 # x\n  bar: 2\n"
       doc = YAML::Nodes.parse(input)
       comments = KYAML::CommentScanner.scan(input)
@@ -71,7 +71,7 @@ describe KYAML::Classifier do
       result.commented.should contain(outer_val)
     end
 
-    it "attaches a comment in the key-to-nested-value gap as leading on the first child" do
+    it "attaches a comment between a key and its nested map to the first entry of that map" do
       input = <<-YAML
         outer:
           # on inner

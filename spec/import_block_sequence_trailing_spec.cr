@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "parsed block sequence element trailing comments" do
-  it "distinguishes a comment on a closed mapping item from a comment on a block mapping entry" do
+describe "comments on the same line as items of a parsed block list" do
+  it "keeps a comment after a one-line map item separate from a comment after a key inside a multi-line map item" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         - {a: 1} # element
@@ -37,7 +37,7 @@ describe "parsed block sequence element trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps inline comments on their matching scalar items" do
+  it "keeps each comment on the same line as the matching item" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # gap
         - 1 # first
@@ -65,7 +65,7 @@ describe "parsed block sequence element trailing comments" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "puts a comment on the inner nested block scalar item" do
+  it "keeps a comment on the same line as a number inside a list within a list" do
     doc = KYAML.parse_doc(<<-YAML)
       - - 1 # inner
       YAML

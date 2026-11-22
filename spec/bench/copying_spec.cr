@@ -2,7 +2,7 @@ require "../spec_helper"
 require "../../bench/workloads"
 
 describe "benchmark copying operations" do
-  it "duplicates the root mapping but shares the nested collections" do
+  it "copies the top-level map but shares the nested collections" do
     root = KYAML.parse_doc(KYAMLBench::Workloads::DEPLOYMENT).root
     copy = root.dup
 
@@ -14,7 +14,7 @@ describe "benchmark copying operations" do
     root["kind"].as_s.should eq("Deployment")
   end
 
-  it "deep-clones nested mappings and sequences independently" do
+  it "deep-copies nested maps and lists so edits do not affect the original" do
     root = KYAML.parse_doc(KYAMLBench::Workloads::DEPLOYMENT).root
     copy = root.clone
 
@@ -50,7 +50,7 @@ describe "benchmark copying operations" do
     ])
   end
 
-  it "copies empty root mappings independently" do
+  it "keeps the original top-level map empty when an entry is added to a copy" do
     root = KYAML::Any.new({} of String => KYAML::Any)
 
     [root.dup, root.clone].each do |copy|
@@ -62,7 +62,7 @@ describe "benchmark copying operations" do
     end
   end
 
-  it "duplicates an empty comment array independently" do
+  it "keeps the original comment list empty when a comment is added to a copy" do
     source = [] of KYAML::Comment
     copy = source.dup
 

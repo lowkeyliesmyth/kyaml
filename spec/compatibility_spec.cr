@@ -4,7 +4,7 @@ require "./spec_helper"
 # Example case kyaml expected outputs are stored in spec/fixtures/compatibility/v0.3.x/x.output.kyaml
 # Inline fixtures in this spec are the expected post-parsing but pre-emission internal kyaml structure.
 describe "KYAML 0.3.x compatibility" do
-  describe "baseline functionality" do
+  describe "reading and writing example files" do
     fixture_dir = File.join(__DIR__, "fixtures", "compatibility", "v0.3.x")
 
     fixtures = [
@@ -47,7 +47,7 @@ describe "KYAML 0.3.x compatibility" do
     fixtures.each do |fixture|
       name = fixture[:name]
 
-      it "parses the #{name} input fixture into the expected values and comments" do
+      it "reads the #{name} input into the expected values and comments" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
 
         KYAML.parse(input).should eq(fixture[:root])
@@ -61,7 +61,7 @@ describe "KYAML 0.3.x compatibility" do
         end
       end
 
-      it "emits the #{name} fixture consistently across repeated parse-and-emit cycles" do
+      it "writes the #{name} output consistently on every cycle" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
         expected_output = File.read(File.join(fixture_dir, "#{name}.output.kyaml"))
         doc = KYAML.parse_doc(input)
@@ -83,7 +83,7 @@ describe "KYAML 0.3.x compatibility" do
         end
       end
 
-      it "preserves the expected root, comments, and output when reparsing the #{name} fixture" do
+      it "keeps the values, comments, and output after writing and reading back #{name}" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
         expected_output = File.read(File.join(fixture_dir, "#{name}.output.kyaml"))
         original = KYAML.parse_doc(input)
@@ -95,7 +95,7 @@ describe "KYAML 0.3.x compatibility" do
       end
     end
 
-    it "preserves root and nested mapping order across roundtrips" do
+    it "keeps map keys in their original order across roundtrips" do
       input = File.read(File.join(fixture_dir, "mapping-comments.input.yaml"))
       original = KYAML.parse_doc(input)
       reparsed = KYAML.parse_doc(KYAML.emit_doc(original))
@@ -108,7 +108,7 @@ describe "KYAML 0.3.x compatibility" do
       end
     end
 
-    it "raises an error when parsing the malformed fixture" do
+    it "rejects the malformed input" do
       input = File.read(File.join(fixture_dir, "malformed.input.yaml"))
 
       expect_raises(KYAML::ParseError) { KYAML.parse(input) }
@@ -118,7 +118,7 @@ describe "KYAML 0.3.x compatibility" do
     end
   end
 
-  describe "duplicate key handling" do
+  describe "repeated keys" do
     fixture_dir = File.join(__DIR__, "fixtures", "compatibility", "v0.3.x")
 
     scalar_root = KYAML::Any.new({
@@ -193,7 +193,7 @@ describe "KYAML 0.3.x compatibility" do
     fixtures.each do |fixture|
       name = fixture[:name]
 
-      it "parses the #{name} input fixture into the expected intermediate values" do
+      it "reads the #{name} input into the expected values" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
 
         KYAML.parse(input).should eq(fixture[:root])
@@ -209,7 +209,7 @@ describe "KYAML 0.3.x compatibility" do
         end
       end
 
-      it "emits the #{name} fixture consistently across repeated roundtrips" do
+      it "writes the #{name} output consistently on every cycle" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
         expected_output = File.read(File.join(fixture_dir, "#{name}.output.kyaml"))
         doc = KYAML.parse_doc(input)
@@ -233,7 +233,7 @@ describe "KYAML 0.3.x compatibility" do
         end
       end
 
-      it "preserves the expected root, keys, comments, and output after reparsing #{name}" do
+      it "keeps the values, key order, comments, and output after writing and reading back #{name}" do
         input = File.read(File.join(fixture_dir, "#{name}.input.yaml"))
         expected_output = File.read(File.join(fixture_dir, "#{name}.output.kyaml"))
         original = KYAML.parse_doc(input)
@@ -247,7 +247,7 @@ describe "KYAML 0.3.x compatibility" do
       end
     end
 
-    it "rejects non-scalar keys when parsing values and documents" do
+    it "rejects list and map keys" do
       input = File.read(File.join(fixture_dir, "non-scalar-key.input.yaml"))
 
       expect_raises(KYAML::NonStringKeyError) { KYAML.parse(input) }

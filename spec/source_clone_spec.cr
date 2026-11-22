@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe KYAML::SourceClone do
-  it "copies isolated node metadata, styles, and alias targets" do
+  it "keeps node details and styles and points aliases to the copied nodes" do
     source = YAML::Nodes.parse("---\n{items: &items [one, \"two\"], first: *items, second: *items}\n")
     mapping = source.nodes.first.as(YAML::Nodes::Mapping)
     sequence = mapping.nodes[1].as(YAML::Nodes::Sequence)
@@ -63,7 +63,7 @@ describe KYAML::SourceClone do
     mapping.tag.should be_nil
   end
 
-  it "preserves recursive alias relationships in an isolated graph" do
+  it "points a copied alias back to its own map, not to the original map" do
     source = YAML::Nodes.parse("&loop {self: *loop}\n")
     orig_mapping = source.nodes.first.as(YAML::Nodes::Mapping)
 
@@ -79,7 +79,7 @@ describe KYAML::SourceClone do
     orig_mapping.nodes.first.as(YAML::Nodes::Scalar).value.should eq("self")
   end
 
-  it "creates isolated copies of empty docs and containers" do
+  it "copies empty documents, maps, and lists without sharing their contents" do
     source = YAML::Nodes::Document.new
     copy = KYAML::SourceClone.clone(source)
 
@@ -107,7 +107,7 @@ describe KYAML::SourceClone do
     end
   end
 
-  it "preserves an unresolved alias and an unavailable anchor" do
+  it "copies an alias whose target is missing and keeps a nil anchor as nil" do
     unresolved = YAML::Nodes::Alias.new("missing")
     source = YAML::Nodes::Document.new
     source << unresolved
@@ -125,7 +125,7 @@ describe KYAML::SourceClone do
     nil_anchor_copy.value.should be_nil
   end
 
-  it "keeps source nodes with equal values separate as distinct objects" do
+  it "gives identical values in a list separate node objects" do
     source = YAML::Nodes.parse("[same, same]\n")
     copy = KYAML::SourceClone.clone(source)
     sequence = copy.nodes.first.as(YAML::Nodes::Sequence)

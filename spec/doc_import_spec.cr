@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "ordinary parsed doc import" do
-  it "moves a same-line key comment to above its owning mapping entry on import" do
+describe "importing parsed YAML documents" do
+  it "moves a comment on the same line as a key above that key" do
     doc = KYAML.parse_doc(<<-YAML)
       a: # why
         b: 1
@@ -33,7 +33,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "preserve headers and nested entry-comment coordinates" do
+  it "keeps the header and records where the nested comment appeared in the original document" do
     doc = KYAML.parse_doc(<<-YAML)
       # header
       ---
@@ -63,7 +63,7 @@ describe "ordinary parsed doc import" do
     doc.clone.to_kyaml.should eq(expected)
   end
 
-  it "imports a key comment in order before a nested sequence" do
+  it "moves a comment above the key for a nested list" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # why
         - a: 1
@@ -86,7 +86,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "preserves header only scalar roots and empty docs" do
+  it "keeps the header above a single value and writes an empty document as null" do
     scalar = KYAML.parse_doc(<<-YAML)
       # header
       ---
@@ -114,7 +114,7 @@ describe "ordinary parsed doc import" do
       KYAML
   end
 
-  it "moves a standalone gap comment to above its entry and keeps snapshots stable" do
+  it "moves a comment between a key and its value above the key without changing the original when copies are edited" do
     doc = KYAML.parse_doc(<<-YAML)
       a:
         # gap
@@ -156,7 +156,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps inline and stacked gap comments in order before a nested sequence" do
+  it "keeps comments in their original order when moving them above the key for a nested list" do
     doc = KYAML.parse_doc(<<-YAML)
       items: # inline
 
@@ -190,7 +190,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps gap comments above entries with empty collection values" do
+  it "moves comments above the keys for empty maps and lists" do
     doc = KYAML.parse_doc(<<-YAML)
       a:
         # empty map
@@ -220,7 +220,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "treats a comment after an opening flow bracket as a child-owned comment" do
+  it "keeps a comment after an opening brace inside the map" do
     doc = KYAML.parse_doc(<<-YAML)
       a:
         { # inside
@@ -245,7 +245,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "imports inline key comments under sequence ancestors" do
+  it "moves a same-line comment above its key inside a list item" do
     doc = KYAML.parse_doc(<<-YAML)
       - a: # why
           b: 1
@@ -277,7 +277,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "imports gap comments beneath multiple sequence ancestors" do
+  it "moves a comment between a key and its value above the key inside nested lists" do
     doc = KYAML.parse_doc(<<-YAML)
       - - x:
             # deep
@@ -304,7 +304,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "preserves stacked inline and gap comments under sequence ancestors" do
+  it "keeps comments in order when moving them above a key inside a list item" do
     doc = KYAML.parse_doc(<<-YAML)
       - a: # inline
           # first
@@ -336,7 +336,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps cuddling when an entry inside a sequence element owns a gap comment" do
+  it "keeps neighboring maps in a list cuddled even when one has a comment" do
     doc = KYAML.parse_doc(<<-YAML)
       - a:
           # note
@@ -361,7 +361,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "keeps mixed scalar sequences uncuddled while importing entry comments" do
+  it "keeps list items uncuddled when the list contains both a map with a comment and a number" do
     doc = KYAML.parse_doc(<<-YAML)
       - a: # why
           b: 1
@@ -386,7 +386,7 @@ describe "ordinary parsed doc import" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "doesn't bypass the duped-key gate for a doc with a gap comment" do
+  it "writes only the last value for a repeated key and leaves out the earlier value's comment" do
     doc = KYAML.parse_doc(<<-YAML)
       a:
         # gap
@@ -437,7 +437,7 @@ describe "ordinary parsed doc import" do
       KYAML
   end
 
-  it "routes each doc in a stream to an owned- or legacy-state route independently" do
+  it "moves the key comment in one document without writing the trailing comment in the next" do
     input = <<-YAML
       ---
       a: # why
@@ -473,7 +473,7 @@ describe "ordinary parsed doc import" do
     yielded.map(&.to_kyaml).should eq(docs.map(&.to_kyaml))
   end
 
-  it "treats a scalar '<<' as an ordinary key and leaves the value unchanged" do
+  it "keeps '<<' as a regular key when its value is plain text" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         <<: literal
@@ -492,7 +492,7 @@ describe "ordinary parsed doc import" do
     doc.to_kyaml.should eq(expected)
   end
 
-  it "uses the explicit string tag to help decide whether a source key is a merge or a scalar" do
+  it "keeps '<<' as a regular key instead of as a merge operator when the key has a string tag" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         !!str <<: {x: 1}

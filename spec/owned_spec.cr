@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe KYAML::Owned::Tree do
-  it "imports nested values while retaining mapping and sequence order" do
+  it "keeps nested values and the order of keys and list items" do
     value = KYAML.parse(%({"b": 2, "a": {"items": [3, 1]}}))
     tree = KYAML::Owned::Tree.from_any(value)
     snapshot = tree.to_any
@@ -12,7 +12,7 @@ describe KYAML::Owned::Tree do
     snapshot["a"]["items"].as_a.map(&.as_i).should eq([3, 1])
   end
 
-  it "isolates imported values from subsequent changes to the source container" do
+  it "does not change when the source container is changed after import" do
     items = [KYAML::Any.new(1)]
     source = {"items" => KYAML::Any.new(items)}
     tree = KYAML::Owned::Tree.from_any(KYAML::Any.new(source))
@@ -25,7 +25,7 @@ describe KYAML::Owned::Tree do
     snapshot["items"].as_a.map(&.as_i).should eq([1])
   end
 
-  it "returns isolated snapshots with disconnected nested collections" do
+  it "returns separate snapshots whose nested maps and lists do not share data" do
     tree = KYAML::Owned::Tree.from_any(KYAML.parse(%({"items": [{"name": "original"}]})))
     first = tree.to_any
     second = tree.to_any
@@ -40,7 +40,7 @@ describe KYAML::Owned::Tree do
     tree.to_any.should eq(second)
   end
 
-  it "retains consistent entry identity and position when an internal key changes" do
+  it "keeps an entry in place and keeps its identity when its key is renamed" do
     tree = KYAML::Owned::Tree.from_any(KYAML.parse(%({"b": 2, "a": 1, "c": 3})))
     mapping = tree.root.as(KYAML::Owned::Mapping)
     entry = mapping["b"]?.not_nil! # ameba:disable Lint/NotNil
@@ -54,7 +54,7 @@ describe KYAML::Owned::Tree do
     tree.to_any.as_h.keys.should eq(["renamed", "a", "c"])
   end
 
-  it "deep-clones mapping entries, sequence elements, and their values" do
+  it "copies map entries, list items, and values so changes to the copy leave the original alone" do
     orig_tree = KYAML::Owned::Tree.from_any(KYAML.parse(%({"a": [1], "b": 2})))
     cloned_tree = orig_tree.clone
     orig_mapping = orig_tree.root.as(KYAML::Owned::Mapping)
@@ -89,7 +89,7 @@ describe KYAML::Owned::Tree do
     cloned_tree.to_any["changed"].as_a.map(&.as_i).should eq([9, 2])
   end
 
-  it "imports repeated references as isolated element subtrees" do
+  it "gives each list item its own copy when the same value is imported twice" do
     shared = KYAML::Any.new([KYAML::Any.new(1)])
     input = KYAML::Any.new([shared, shared])
     tree = KYAML::Owned::Tree.from_any(input)
@@ -111,7 +111,7 @@ describe KYAML::Owned::Tree do
     shared.as_a.map(&.as_i).should eq([1])
   end
 
-  it "retains scalar values and their types through snapshots and cloning" do
+  it "keeps each simple value and its type after snapshot and copy" do
     values = [nil, true, false, 1_i64, 1.5_f64, "text", ""] of KYAML::Owned::Leaf
 
     values.each do |val|
@@ -127,7 +127,7 @@ describe KYAML::Owned::Tree do
     end
   end
 
-  it "preserves empty mappings and sequences as isolated containers" do
+  it "keeps empty maps and lists empty and separate across snapshots" do
     mapping_tree = KYAML::Owned::Tree.from_any(KYAML.parse("{}"))
     sequence_tree = KYAML::Owned::Tree.from_any(KYAML.parse("[]"))
 
@@ -145,7 +145,7 @@ describe KYAML::Owned::Tree do
     second_sequence.should be_empty
   end
 
-  it "uses case-sensitive lookups and returns nil for missing keys" do
+  it "matches keys exactly by case and returns nil for a key that is missing" do
     val = KYAML.parse(%({"": 0, "a.b": 1, "a/b": 2, "Name": 3}))
     mapping = KYAML::Owned::Tree.from_any(val).root.as(KYAML::Owned::Mapping)
 

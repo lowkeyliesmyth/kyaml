@@ -2,7 +2,7 @@ require "./spec_helper"
 
 describe "KYAML integration" do
   describe "round trip (parse -> emit -> parse)" do
-    it "preserves a nested structure of mixed scalar types" do
+    it "keeps nested values and their types unchanged" do
       input = <<-KYAML
         {
           name: "svc",
@@ -23,7 +23,7 @@ describe "KYAML integration" do
   end
 
   describe "Norway-bug and ambiguous scalar quoting" do
-    it "emits ambiguous string values qyoted so they round-trip as strings" do
+    it "quotes words such as 'no' and 'on' so they are read back as text" do
       %w[NO no N YES yes Y On Off].each do |word|
         emitted = KYAML.emit(word)
         emitted.should eq(%("#{word}"))
@@ -31,19 +31,19 @@ describe "KYAML integration" do
       end
     end
 
-    it "emits time sexagesimal strings as quoted" do
+    it "quotes text that looks like a time (sexagesimal) so it is read back as text" do
       KYAML.emit("11:00").should eq(%("11:00"))
       KYAML.parse(KYAML.emit("11:00")).raw.should eq("11:00")
     end
 
-    it "emits timestamp-like strings as quoted" do
+    it "quotes timestamp-like strings so it is read back as text" do
       KYAML.emit("2026-01-01").should eq(%("2026-01-01"))
       KYAML.parse(KYAML.emit("2026-01-01")).raw.should eq("2026-01-01")
     end
   end
 
   describe "comment round trip (parse -> emit -> parse)" do
-    it "preserves a leading comment" do
+    it "keeps a comment before the first key" do
       input = <<-YAML
         ---
         # leading
@@ -54,7 +54,7 @@ describe "KYAML integration" do
       rt.comments.map(&.text).should eq([" leading"])
     end
 
-    it "preserves a trailing/inline comment" do
+    it "keeps a comment written on the same line as a value" do
       input = <<-YAML
         foo: 1 # trailing
 
@@ -63,7 +63,7 @@ describe "KYAML integration" do
       rt.comments.map(&.text).should eq([" trailing"])
     end
 
-    it "preserves a standalone comment between siblings" do
+    it "keeps a standalone comment from the end of a nested map" do
       input = <<-YAML
         outer:
           foo: 1
@@ -75,7 +75,7 @@ describe "KYAML integration" do
       rt.comments.map(&.text).should eq([" tail"])
     end
 
-    it "preserves a doc-header comment" do
+    it "keeps a comment that follows the doc separator" do
       input = <<-YAML
         ---
         # header
@@ -86,7 +86,7 @@ describe "KYAML integration" do
       rt.comments.map(&.text).should eq([" header"])
     end
 
-    it "preserves per-doc comments across a multi-doc stream" do
+    it "keeps each comment with its own doc in a stream" do
       input = <<-YAML
         # doc one
         ---
@@ -100,7 +100,7 @@ describe "KYAML integration" do
       rt.map { |doc| doc.comments.map(&.text) }.should eq([[" doc one"], [" doc two"]])
     end
 
-    it "preserves comments at every nesting depth of a doc" do
+    it "keeps comments at different levels of a doc in order" do
       input = <<-YAML
         # header comment
         ---

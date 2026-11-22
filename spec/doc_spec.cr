@@ -31,7 +31,7 @@ describe KYAML::Doc do
   factories.each do |factory|
     name = factory[:name]
 
-    it "returns isolated root and comment snapshots for #{name} docs" do
+    it "lets you change copies of the root and comments without changing the #{name} doc" do
       doc = factory[:build].call
       expected_root = doc.root
       expected_comments = doc.comments
@@ -55,7 +55,7 @@ describe KYAML::Doc do
       doc.to_kyaml.should eq(expected_output)
     end
 
-    it "clones #{name} type docs with equal contents but a distinct identity" do
+    it "makes a separate copy of the #{name} doc with the same contents" do
       orig = factory[:build].call
       copy = orig.clone
       expected_output = orig.to_kyaml
@@ -79,7 +79,7 @@ describe KYAML::Doc do
     end
   end
 
-  it "isolates constructor roots and comment arrays for both storage paths" do
+  it "keeps the doc unchanged when you edit the root or comment list used to create it" do
     [
       [] of KYAML::Comment,
       [KYAML::Comment.new(" supplied", 4, 2)],
@@ -101,7 +101,7 @@ describe KYAML::Doc do
     end
   end
 
-  it "shares doc identity through assignment and arg passing" do
+  it "uses the same doc when you assign it to another variable or pass it to a function" do
     doc = KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment)
     assigned = doc
     pass_through = ->(value : KYAML::Doc) { value }
@@ -110,7 +110,7 @@ describe KYAML::Doc do
     pass_through.call(doc).should be(doc)
   end
 
-  it "uses reference identity for equality and hash keys" do
+  it "treats separate documents with the same contents as unequal and lets them be separate hash keys" do
     first = KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment)
     second = KYAML::Doc.new(KYAML::Any.new(1), [] of KYAML::Comment)
     entries = {first => "first", second => "second"}
@@ -122,7 +122,7 @@ describe KYAML::Doc do
     entries[second].should eq("second")
   end
 
-  it "keeps existing legacy behavior for emitting hand-generated comments without source nodes" do
+  it "keeps legacy behavior when there are no source nodes" do
     comments = [KYAML::Comment.new(" supplied", 4, 2)]
     doc = KYAML::Doc.new(KYAML.parse("foo: 1\n"), comments)
 
@@ -131,7 +131,7 @@ describe KYAML::Doc do
     doc.to_kyaml.should eq("---\n{\n  foo: 1,\n}\n")
   end
 
-  it "preserves parsed comments and source coordinates during cloning" do
+  it "keeps comments and their original line and column numbers when copying a parsed document" do
     doc = KYAML.parse_doc("# header\n---\nfoo: 1 # trailing\n")
     copy = doc.clone
 
@@ -145,7 +145,7 @@ describe KYAML::Doc do
     copy.responds_to?(:yaml_doc).should be_false
   end
 
-  it "keeps owned emissions and existing bare-value formatting consistent" do
+  it "formats values the same way with or without a document wrapper" do
     inputs = [
       "null",
       "42",
@@ -171,7 +171,7 @@ describe KYAML::Doc do
     end
   end
 
-  it "keeps emission failures for invalid non-finite scalar values" do
+  it "raises an error when writing a doc or its copy if the value is NaN" do
     doc = KYAML::Doc.new(
       KYAML::Any.new(Float64::NAN),
       [] of KYAML::Comment,

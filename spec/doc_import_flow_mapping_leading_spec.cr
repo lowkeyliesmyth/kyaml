@@ -1,7 +1,7 @@
 require "./spec_helper"
 
-describe "leading comments inside parsed flow mappings" do
-  it "keeps stacked comments on the first entry of a mapping inside a sequence" do
+describe "comments before the first key of a parsed flow map" do
+  it "keeps a group of comments above the first key of a map inside a list" do
     doc = KYAML.parse_doc(<<-YAML)
       - {
           # first
@@ -34,7 +34,7 @@ describe "leading comments inside parsed flow mappings" do
     KYAML.parse(expected).should eq(doc.root)
   end
 
-  it "distinguishes a comment before a nested value from one before the next sibling key" do
+  it "distinguishes a comment above a nested map's first key from a comment above the next key in the outer map" do
     doc = KYAML.parse_doc(<<-YAML)
       outer: # gap
         {
