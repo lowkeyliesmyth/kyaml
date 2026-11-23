@@ -50,13 +50,13 @@ module KYAML
           (owners.leading[key] ||= [] of KYAML::Comment) << comment
         elsif key = trailing_value_key_for(comment, source)
           (owners.trailing[key] ||= [] of KYAML::Comment) << comment
-        elsif mapping = flow_mapping_tail_for(comment, source)
+        elsif mapping = flow_mapping_tail_for(comment, source, source_lines)
           (owners.mapping_tails[mapping] ||= [] of KYAML::Comment) << comment
-        elsif key = flow_leading_key_for(comment, source)
+        elsif key = flow_leading_key_for(comment, source, source_lines)
           (owners.leading[key] ||= [] of KYAML::Comment) << comment
         elsif sequence = flow_sequence_tail_for(comment, source)
           (owners.sequence_tails[sequence] ||= [] of KYAML::Comment) << comment
-        elsif element = flow_leading_element_for(comment, source)
+        elsif element = flow_leading_element_for(comment, source, source_lines)
           (owners.element_leading[element] ||= [] of KYAML::Comment) << comment
         elsif element = trailing_element_for(comment, source)
           (owners.element_trailing[element] ||= [] of KYAML::Comment) << comment

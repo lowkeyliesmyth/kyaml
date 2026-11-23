@@ -84,73 +84,93 @@ module KYAML
       nil
     end
 
-    # Search **source** for the flow mapping whose tail contains **comment**. Includes mappings nested inside sequences.
+    # Use **source_lines** to check whether **comment** is after the last entry (or opening brace if empty) and before the closing brace of a flow-style **mapping**.
+    private def flow_mapping_tail?(
+      comment : KYAML::Comment,
+      mapping : YAML::Nodes::Mapping,
+      source_lines : Array(String),
+    ) : Bool
+      return false unless mapping.style.flow?
+      return false unless mapping.start_line <= comment.line && comment.line < mapping.end_line
+
+      if last_value = mapping.nodes.last?
+        last_value.end_line < comment.line
+      else
+        flow_opener_before_comment?(mapping, comment, source_lines, '{')
+      end
+    end
+
+    # Use **source_lines** to find the flow mapping in **source** where **comment** appears before the closing brace and after any entries.
     private def flow_mapping_tail_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
+      source_lines : Array(String),
     ) : YAML::Nodes::Mapping?
       case source
       when YAML::Nodes::Mapping
-        return source if flow_mapping_tail?(comment, source)
+        return source if flow_mapping_tail?(comment, source, source_lines)
 
-        source.each do |_, value|
-          found = flow_mapping_tail_for(comment, value)
+        source.each do |_, v|
+          found = flow_mapping_tail_for(comment, v, source_lines)
           return found if found
         end
       when YAML::Nodes::Sequence
         source.nodes.each do |elem|
-          found = flow_mapping_tail_for(comment, elem)
+          found = flow_mapping_tail_for(comment, elem, source_lines)
           return found if found
         end
       end
       nil
     end
 
-    # Find the next entry owning **comment** inside a flow mapping in **source**.
+    # Find the flow mapping key in the **source** node that **comment** leads, using **source_lines** for extra context.
     private def flow_leading_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
+      source_lines : Array(String),
     ) : YAML::Nodes::Node?
       case source
       when YAML::Nodes::Mapping
         if source.style.flow?
-          key = next_flow_key_for(comment, source)
-          return key if key
+          found = next_flow_key_for(comment, source, source_lines)
+          return found if found
         end
 
         source.each do |_, val|
-          found = flow_leading_key_for(comment, val)
+          found = flow_leading_key_for(comment, val, source_lines)
           return found if found
         end
       when YAML::Nodes::Sequence
         source.nodes.each do |elem|
-          found = flow_leading_key_for(comment, elem)
+          found = flow_leading_key_for(comment, elem, source_lines)
           return found if found
         end
       end
       nil
     end
 
-    # Find the key that **comment** should attach to in a flow-style **mapping** when it sits between two entries (after the previous value and before the next key).
+    # Use **source_lines** to find the key led by **comment** in a flow-style **mapping**.
+    # Find the key led by **comment** in a flow-style **mapping**
     private def next_flow_key_for(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
+      source_lines : Array(String),
     ) : YAML::Nodes::Node?
-      return unless mapping.start_line < comment.line && comment.line < mapping.end_line
+      return unless mapping.start_line <= comment.line && comment.line < mapping.end_line
 
-      lower_line = mapping.start_line
-      first = true
+      previous_value : YAML::Nodes::Node? = nil
 
       mapping.each do |k, v|
         if comment.line < k.start_line
-          # A tag can come before the opening brace on a separate line.
-          return if first && mapping.tag
-          return k if lower_line < comment.line
+          if previous = previous_value
+            return k if previous.end_line < comment.line
+          elsif flow_opener_before_comment?(mapping, comment, source_lines, '{')
+            return k
+          end
           return
         end
 
-        lower_line = v.end_line
-        first = false
+        previous_value = v
       end
       nil
     end
@@ -185,43 +205,83 @@ module KYAML
     private def flow_leading_element_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
+      source_lines : Array(String),
     ) : YAML::Nodes::Node?
       case source
       when YAML::Nodes::Mapping
         source.each do |_, v|
-          found = flow_leading_element_for(comment, v)
+          found = flow_leading_element_for(comment, v, source_lines)
           return found if found
         end
       when YAML::Nodes::Sequence
         if source.style.flow?
-          element = next_flow_element_for(comment, source)
+          element = next_flow_element_for(comment, source, source_lines)
           return element if element
         end
 
         source.nodes.each do |child|
-          found = flow_leading_element_for(comment, child)
+          found = flow_leading_element_for(comment, child, source_lines)
           return found if found
         end
       end
       nil
     end
 
-    # Find the element in **sequence** that **comment** should attach to as a leading comment.
-    # Return the element immediately following **comment** when it falls strictly between two elements, or the first element if **comment** comes after the opening line and before the first element (unless a tag hides that spot).
+    # Return the next element in **sequence** for **comment** when comment is on a separate line between elements. Or when comment is after the opening `[` and before the first element.
+    #
+    # Use **source_lines** to find the opening sequence bracket.
     private def next_flow_element_for(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
+      source_lines : Array(String),
     ) : YAML::Nodes::Node?
-      lower_line = sequence.start_line
-      sequence.nodes.each_with_index do |elem, i|
+      return unless sequence.start_line <= comment.line && comment.line < sequence.end_line
+
+      previous_elem : YAML::Nodes::Node? = nil
+      sequence.nodes.each do |elem|
         if comment.line < elem.start_line
-          return if i.zero? && sequence.tag
-          return elem if lower_line < comment.line
+          if previous = previous_elem
+            return elem if previous.end_line < comment.line
+          elsif flow_opener_before_comment?(sequence, comment, source_lines, '[')
+            return elem
+          end
           return
         end
 
-        lower_line = elem.end_line
+        previous_elem = elem
       end
+      nil
+    end
+
+    # Check whether **opener** is the first syntax character in **node** before **comment**, using the source **lines** and skipping any tag, whitespace, or earlier comments.
+    private def flow_opener_before_comment?(
+      node : YAML::Nodes::Node,
+      comment : KYAML::Comment,
+      lines : Array(String),
+      opener : Char,
+    ) : Bool
+      in_tag = !node.tag.nil?
+
+      (node.start_line..comment.line).each do |line_num|
+        line = lines[line_num - 1]?
+        return false unless line
+        start = line_num == node.start_line ? node.start_column - 1 : 0
+        limit = line_num == comment.line ? comment.column - 1 : line.size
+
+        (start...limit).each do |idx|
+          char = line[idx]
+          if in_tag
+            in_tag = false if char.whitespace?
+            next
+          end
+          next if char.whitespace?
+          break if char == '#'
+          return char == opener
+        end
+
+        in_tag = false
+      end
+      false
     end
 
     # Find the element in **source** whose value ends right before **comment**, so the comment can be attached as a trailing comment on that element.
@@ -263,25 +323,6 @@ module KYAML
         candidate = elem
       end
       candidate
-    end
-
-    # Check a flow-style **mapping** if **comment** sits between the last value's ending line and its closing brace.
-    private def flow_mapping_tail?(
-      comment : KYAML::Comment,
-      mapping : YAML::Nodes::Mapping,
-    ) : Bool
-      return false unless mapping.style.flow?
-      return false unless mapping.start_line < comment.line && comment.line < mapping.end_line
-
-      last_value : YAML::Nodes::Node? = nil
-      mapping.each { |_, value| last_value = value }
-
-      if value = last_value
-        value.end_line < comment.line
-      else
-        # An explicit tag can start on an earlier line than the opening brace
-        mapping.tag.nil?
-      end
     end
 
     # Internal helper to check if a **node** is a mapping or sequence container type.

@@ -533,4 +533,78 @@ describe "importing parsed YAML documents" do
     doc.to_kyaml.should eq(expected)
     doc.to_kyaml.should_not contain("# gap")
   end
+
+  it "imports a YAML merge operation symbol key with a scalar value as a mapping string key without actually applying merge operations" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        <<: literal
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          "<<": "literal",
+        },
+      }
+
+      KYAML
+    doc.root["outer"]["<<"].as_s.should eq("literal")
+    doc.to_kyaml.should eq(expected)
+  end
+
+  it "treats '<<' as a regular key when it is tagged as a string" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        !!str <<: {x: 1}
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        # gap
+        outer: {
+          "<<": {
+            x: 1,
+          },
+        },
+      }
+
+      KYAML
+    doc.to_kyaml.should eq(expected)
+    doc.root["outer"]["<<"]["x"].as_i.should eq(1)
+    doc.to_kyaml.should contain("  # gap\n  outer:")
+  end
+
+  it "falls back to legacy behavior when applying merge operations, leaving out the ambiguous comment" do
+    doc = KYAML.parse_doc(<<-YAML)
+      outer: # gap
+        <<: {x: 1}
+
+      YAML
+    doc.root["outer"]["x"].as_i.should eq(1)
+    doc.to_kyaml.should_not contain("# gap")
+  end
+
+  it "attaches a comment after a list dash to the actual list item" do
+    doc = KYAML.parse_doc(<<-YAML)
+      items:
+        - # item
+          value
+
+      YAML
+    expected = <<-KYAML
+      ---
+      {
+        items: [
+          # item
+          "value",
+        ],
+      }
+
+      KYAML
+    doc.to_kyaml.should eq(expected)
+    doc.comments.should eq([KYAML::Comment.new(" item", 2, 5)])
+  end
 end
