@@ -2,6 +2,7 @@ require "set"
 require "yaml"
 require "./any"
 require "./comment"
+require "./error"
 require "./owned"
 require "./importer/block_placement"
 require "./importer/placement"
@@ -11,6 +12,13 @@ module KYAML
   # :nodoc:
   module Importer
     extend self
+
+    # A parsed doc whose first ambiguous unowned comment prevents a fully owned import.
+    # :nodoc:
+    record Rejected,
+      reason : UnsupportedDocReason,
+      line : Int32,
+      column : Int32
 
     alias SourcePair = Tuple(YAML::Nodes::Scalar, YAML::Nodes::Node)
 
@@ -29,13 +37,20 @@ module KYAML
     # Return `nil` if if the doc can't be imported safely because of comments with ambiguous owners.
     #
     # TODO: This thing is monstrous, circle back to split it up.
-    def import(root : KYAML::Any, comments : Array(KYAML::Comment), yaml_doc : YAML::Nodes::Document, source_lines : Array(String)) : Owned::Tree? # ameba:disable Metrics/CyclomaticComplexity
+    def import(root : KYAML::Any, comments : Array(KYAML::Comment), yaml_doc : YAML::Nodes::Document, source_lines : Array(String)) : Owned::Tree? | Rejected # ameba:disable Metrics/CyclomaticComplexity
       source = yaml_doc.nodes.first?
-      if source.nil?
-        # A doc with no nodes can only hold a null root. Anything else means that the parsed result and the root disagree which would def be a bug.
+      unless source
         raise ArgumentError.new("Parsed source is missing its value") unless root.raw.nil?
-        # An empty doc needs to be importable. A doc containing only comments means there's no node to own its comments, so can't be a tree and returns nil. Returning nil here lets callers choose to fallback to legacy state handling.
-        return comments.empty? ? Owned::Tree.from_any(root) : nil
+
+        if first = comments.first?
+          return Rejected.new(
+            UnsupportedDocReason::UnsupportedCommentPlacement,
+            first.line,
+            first.column
+          )
+        end
+
+        return Owned::Tree.from_any(root)
       end
 
       return unless ordinary?(source)
@@ -76,7 +91,11 @@ module KYAML
             raise ArgumentError.new("Unexpected block comment slot: #{hit.slot}")
           end
         else
-          return
+          return Rejected.new(
+            UnsupportedDocReason::UnsupportedCommentPlacement,
+            comment.line,
+            comment.column,
+          )
         end
       end
 

@@ -7,11 +7,12 @@ require "./owned"
 require "./source_clone"
 
 module KYAML
-  # A kyaml doc that owns its values, comments, and source information.
-  # Assignment shares the doc, reads return detached snapshots, and `#clone` creates an isolated copy.
-  # Assignment and argument passing share this instance. Equality and hashing use reference identity.
+  # A KYAML document that maintains its own internal representation of its values, comments, and any available source YAML information.
+  # Reading the root values or comments returns an isolated, detached snapshot of just that data. Changing a snapshot doesn't affect this source doc or any other detached snapshot.
+  #
+  # Cloning copies the entire document including its content, comments, and metadata without sharing mutable state with the original.
   class Doc
-    # Temp storage for parsed docs and non-editable handbuilt docs.
+    # Store the root value, comments, and any available source and diagnostic information for a non-editable document.
     # :nodoc:
     class LegacyState
       protected getter root : KYAML::Any
@@ -46,10 +47,8 @@ module KYAML
 
     @state : Owned::Tree | LegacyState
 
-    # Construct an isolated copy of **root** and **comments**.
-    #
-    # Empty comments still produce an owned, editable doc.
-    # But providing comments without source nodes makes the doc uneditable.
+    # Create a Doc that owns copies of **root** and **comments**.
+    # Pass an empty array for **comments** to make the document editable.
     def initialize(root : KYAML::Any, comments : Array(KYAML::Comment))
       if comments.empty?
         @state = Owned::Tree.from_any(root)
@@ -66,14 +65,14 @@ module KYAML
       end
     end
 
-    # Internally accept state already owned by this doc.
+    # Create a doc from **state** without copying it.
     # :nodoc:
     protected def initialize(@state : Owned::Tree | LegacyState)
     end
 
-    # Build a doc from a parsed source, importing **root**, **comments**, and **yaml_doc** into an owned, editable tree using **source_lines** for context.
+    # Build an editable doc from **root**, **comments**, and **yaml_doc**, using **source_lines** for context.
     #
-    # Falls back to a non-editable doc if the import isn't supported.
+    # If the import is unsupported, return a non-editable doc.
     # :nodoc:
     protected def self.from_parsed(
       root : KYAML::Any,
@@ -81,10 +80,22 @@ module KYAML
       yaml_doc : YAML::Nodes::Document,
       source_lines : Array(String),
     ) : Doc
-      if tree = Importer.import(root, comments, yaml_doc, source_lines)
-        new(tree)
-      else
+      case result = Importer.import(root, comments, yaml_doc, source_lines)
+      when Owned::Tree
+        new(result)
+      when Importer::Rejected
+        new(LegacyState.new(
+          root,
+          comments,
+          yaml_doc,
+          result.reason,
+          result.line,
+          result.column
+        ))
+      when Nil
         new(LegacyState.new(root, comments, yaml_doc))
+      else
+        raise ArgumentError.new("Unexpected doc import result")
       end
     end
 

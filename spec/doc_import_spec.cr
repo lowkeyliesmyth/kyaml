@@ -608,3 +608,76 @@ describe "importing parsed YAML documents" do
     doc.comments.should eq([KYAML::Comment.new(" item", 2, 5)])
   end
 end
+
+describe "parsed document fallback to legacy readonly behavior" do
+  it "stores all comments internally but doesn't emit any when an empty list contains comments" do
+    input = <<-YAML
+      items: # supported
+        [
+          # first unsupported
+          # second unsupported
+        ]
+
+      YAML
+    doc = KYAML.parse_doc(input)
+
+    expected = <<-KYAML
+      ---
+      {
+        items: [],
+      }
+
+      KYAML
+    comments = [
+      KYAML::Comment.new(" supported", 1, 8),
+      KYAML::Comment.new(" first unsupported", 3, 5),
+      KYAML::Comment.new(" second unsupported", 4, 5),
+    ]
+    doc.root["items"].as_a.should be_empty
+    doc.comments.should eq(comments)
+    doc.to_kyaml.should eq(expected)
+
+    copy = doc.clone
+    copy.comments.should eq(comments)
+    copy.to_kyaml.should eq(expected)
+  end
+
+  it "records a comment after a single value without turning it into a header" do
+    doc = KYAML.parse_doc(<<-YAML)
+      42 # trailing
+
+      YAML
+
+    doc.root.as_i.should eq(42)
+    doc.comments.should eq([KYAML::Comment.new(" trailing", 1, 4)])
+    doc.to_kyaml.should eq(<<-KYAML)
+      ---
+      42
+
+      KYAML
+  end
+
+  it "retains emitting null for comment-only single-doc behavior but emits an empty stream on multi-doc" do
+    input = <<-YAML
+      # only
+
+      YAML
+
+    doc = KYAML.parse_doc(input)
+
+    doc.root.raw.should be_nil
+    doc.comments.should eq([KYAML::Comment.new(" only", 1, 1)])
+    doc.to_kyaml.should eq(<<-KYAML)
+      ---
+      null
+
+      KYAML
+    doc.clone.comments.should eq(doc.comments)
+
+    KYAML.parse_all_docs(input).should be_empty
+
+    yielded = [] of KYAML::Doc
+    KYAML.parse_all_docs(input) { |item| yielded << item }
+    yielded.should be_empty
+  end
+end
