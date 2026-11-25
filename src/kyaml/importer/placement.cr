@@ -1,6 +1,6 @@
 module KYAML
   module Importer
-    # Return true when **comment** comes before the **root** and source **yaml_doc** doc header.
+    # Check if the **comment** comes before both the **yaml_doc** header and **root** start lines.
     private def header_comment?(
       comment : KYAML::Comment,
       root : YAML::Nodes::Node,
@@ -9,7 +9,8 @@ module KYAML
       comment.line < root.start_line && comment.line < yaml_doc.start_line
     end
 
-    # Find the key owning **comment** between that key and its nested mapping or sequence node in **source**.
+    # Find the key in the **source** collection subtree that **comment** sits after said key but before its value's first line.
+    # That key becomes the assigned comment owner.
     private def trailing_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -38,7 +39,9 @@ module KYAML
       nil
     end
 
-    # Find the key in the **source** node whose value ends before **comment** on the same line.
+    # Find the collection key in the **source** node subtree whose value ends before the trailing **comment** on the same line.
+    #
+    # Flow collections that end before the comment are excluded.
     private def trailing_value_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -53,7 +56,7 @@ module KYAML
       end
     end
 
-    # Find the key in **mapping** whose value ends before **comment** on the same line
+    # Find the **mapping** key whose value ends before the trailing **comment** on the same line.
     private def trailing_value_mapping_key_for(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
@@ -70,7 +73,7 @@ module KYAML
       trailing_value_key_for(comment, value) if container?(value)
     end
 
-    # Search **sequence** elements looking for a trailing value key for **comment**. Skip non-container elements.
+    # Find the first **sequence** key whose value ends before the trailing **comment** on the same line.
     private def trailing_value_sequence_key_for(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
@@ -84,7 +87,8 @@ module KYAML
       nil
     end
 
-    # Use **source_lines** to check whether **comment** is after the last entry (or opening brace if empty) and before the closing brace of a flow-style **mapping**.
+    # Check whether the **comment** belongs to the tail of a flow-style **mapping**.
+    # Original **source_lines** content helps find the mappings' opening brace.
     private def flow_mapping_tail?(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
@@ -100,7 +104,8 @@ module KYAML
       end
     end
 
-    # Use **source_lines** to find the flow mapping in **source** where **comment** appears before the closing brace and after any entries.
+    # Find the flow mapping subtree in **source** that owns the tail **comment**.
+    # Original **source_lines** content helps find the mappings' opening brace.
     private def flow_mapping_tail_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -123,7 +128,8 @@ module KYAML
       nil
     end
 
-    # Find the flow mapping key in the **source** node that **comment** leads, using **source_lines** for extra context.
+    # Find the flow-style mapping's key node in **source** that owns the **comment** leading it.
+    # Original **source_lines** content helps find the mappings' opening brace.
     private def flow_leading_key_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -149,8 +155,8 @@ module KYAML
       nil
     end
 
-    # Use **source_lines** to find the key led by **comment** in a flow-style **mapping**.
-    # Find the key led by **comment** in a flow-style **mapping**
+    # Find the next key in flow-style **mapping** after **comment** between entries or after the opening brace.
+    # Original **source_lines** content helps find the mappings' opening brace.
     private def next_flow_key_for(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
@@ -175,7 +181,9 @@ module KYAML
       nil
     end
 
-    # Find the flow sequence in **source** that contains **comment** after its last element but before the closing bracket.
+    # Find the flow-style sequence in the **source** subtree that owns the following tail **comment**.
+    #
+    # Require a line after the last element and before the closing bracket.
     private def flow_sequence_tail_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -201,7 +209,10 @@ module KYAML
       nil
     end
 
-    # Find the flow sequence element in **source** that owns **comment** as a standalone leading comment.
+    # Find the flow-style sequence element in the **source** subtree that owns the leading **comment** before it.
+    # Original **source_lines** content helps find the opening brackets.
+    #
+    # A comment can follow the opening bracket on the same line when it leads the first element.
     private def flow_leading_element_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -227,9 +238,8 @@ module KYAML
       nil
     end
 
-    # Return the next element in **sequence** for **comment** when comment is on a separate line between elements. Or when comment is after the opening `[` and before the first element.
-    #
-    # Use **source_lines** to find the opening sequence bracket.
+    # Find the next element in a flow-style **sequence** after an in-between **comment**, or after the opening bracket.
+    # Original **source_lines** content helps find the opening bracket.
     private def next_flow_element_for(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
@@ -253,7 +263,8 @@ module KYAML
       nil
     end
 
-    # Check whether **opener** is the first syntax character in **node** before **comment**, using the source **lines** and skipping any tag, whitespace, or earlier comments.
+    # Check if the **opener** delimiter character is the first token before the **comment** in the collection **node**. Original **source_lines** content helps with scoping.
+    # Skip the node's tag, whitespace, and earlier comments.
     private def flow_opener_before_comment?(
       node : YAML::Nodes::Node,
       comment : KYAML::Comment,
@@ -284,7 +295,7 @@ module KYAML
       false
     end
 
-    # Find the element in **source** whose value ends right before **comment**, so the comment can be attached as a trailing comment on that element.
+    # Find the sequence element in the **source** subtree that ends before the **comment** on the same line.
     private def trailing_element_for(
       comment : KYAML::Comment,
       source : YAML::Nodes::Node,
@@ -310,7 +321,7 @@ module KYAML
       nil
     end
 
-    # Find the last element in **sequence** whose start position is before **comment**, handling the case where multiple elements share the same source line.
+    # Find the last element in a **sequence** that starts before the **comment**.
     private def preceding_sequence_element(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
@@ -330,14 +341,13 @@ module KYAML
       node.is_a?(YAML::Nodes::Mapping) || node.is_a?(YAML::Nodes::Sequence)
     end
 
-    # Internal helper to check if a **key** comes before a **comment**.
+    # Internal helper to check if a **key** node comes before a **comment**.
     private def key_starts_before?(key : YAML::Nodes::Node, comment : KYAML::Comment) : Bool
       key.start_line < comment.line ||
         (key.start_line == comment.line && key.start_column < comment.column)
     end
 
-    # Check if a flow-style container **node** ends before a **comment**.
-    # Used for detecting trailing comments on flow container nodes.
+    # Check if a flow-style collection **node** ends and closes before the **comment**.
     private def flow_container_ends_before?(
       comment : KYAML::Comment,
       node : YAML::Nodes::Node,
@@ -355,7 +365,8 @@ module KYAML
         (comment.line == node.end_line && comment.column > node.end_column)
     end
 
-    # Checks whether the **value** nodes end position precedes **comment**, so the comment can be treated as trailing on the same line. Matches scalar tokens and flow-style containers.
+    # Check if a candidate **value** node can own a trailing **comment** sitting on the same line.
+    # Candidate value nodes can be flow collections, quoted scalars, or nonempty plain scalars that end before the comment.
     private def value_ends_before?(comment : KYAML::Comment, value : YAML::Nodes::Node) : Bool
       return false unless comment.line == value.end_line
       return false unless comment.column > value.end_column

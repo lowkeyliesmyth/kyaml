@@ -1,6 +1,6 @@
 module KYAML
   module Importer
-    # Identifies what kind of block collection gap that a comment falls into.
+    # Categorize the kind of gap a comment has inside a block collection.
     private enum BlockSlot
       EntryLeading
       MappingTail
@@ -8,18 +8,19 @@ module KYAML
       SequenceTail
     end
 
-    # Describes where a comment attaches within a block collection:
-    # - which BlockSlot bucket this comment fits into
-    # - which node it's connected to
-    # - the expected indentation at that location
+    # Describe where a comment attaches in a block collection.
+    #
+    # - **slot**: kind of gap
+    # - **node**: owning key, element, or collection
+    # - **indent**: expected indentation at the attachment point
     private record BlockHit,
       slot : BlockSlot,
       node : YAML::Nodes::Node,
       indent : Int32
 
-    # Return the line number where a **node**'s content actually ends.
+    # Return the last line of a **node**'s content.
     #
-    # Block collection virtual end events fire at the next sibling or EOF, so the reported end line can actually be way past the collection's real content end.
+    # Pin down a block collection's actual last line, since its reported end can extend to the next sibling or end of input.
     private def content_end_line(node : YAML::Nodes::Node) : Int32
       case node
       when YAML::Nodes::Mapping, YAML::Nodes::Sequence
@@ -35,13 +36,14 @@ module KYAML
       node.end_line
     end
 
-    # Check if the **comment** on **line** is standalone and only has whitespace in front of it.
+    # Check source **lines** for if the **comment** only has whitespace in front of it on its line.
     private def standalone?(comment : KYAML::Comment, lines : Array(String)) : Bool
       line = lines[comment.line - 1]?
       return false unless line
       line[0, comment.column - 1].strip.empty?
     end
 
+    # Search a block **sequence** for the location that a **comment** is attached.
     private def sequence_block_hit(
       comment : KYAML::Comment,
       sequence : YAML::Nodes::Sequence,
@@ -75,7 +77,7 @@ module KYAML
       end
     end
 
-    # Find the k-v pair `BlockHit` that a **comment** belongs to inside a block **mapping**.
+    # Search a block **mapping** for the location that a **comment** is attached.
     private def mapping_block_hit(
       comment : KYAML::Comment,
       mapping : YAML::Nodes::Mapping,
@@ -114,9 +116,9 @@ module KYAML
       end
     end
 
-    # Return the `BlockHit` for a **comment** that's inside a nested **node**.
+    # Search a nested block collection **node** for the location that a **comment** is attached.
     #
-    # Return nil if the comment comes before the node starts, or if the node isn't a block-style mapping.
+    # Return `nil` if the comment isn't found attached to the node or if the node isn't actually a block collection.
     private def nested_block_hit(
       comment : KYAML::Comment,
       node : YAML::Nodes::Node,
@@ -131,9 +133,9 @@ module KYAML
       end
     end
 
-    # Return the `BlockHit` where a **comment** in the owning **doc**'s **root** node  attaches within the top-level block collection.
+    # Find where in a **doc**'s block **root** or its descendants node a standalone **comment** is attached.
     #
-    # **lines** is the source text split up on each physical line as an entry in an array to lookup the raw text of the line a comment is on.
+    # Ignores comments beyond the doc's end or on its explicit end marker calculated from the original source **lines**.
     private def block_hit(
       comment : KYAML::Comment,
       root : YAML::Nodes::Node,

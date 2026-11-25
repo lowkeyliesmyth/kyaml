@@ -7,13 +7,9 @@ require "./error"
 require "./validator"
 
 module KYAML
-  # Parses a single K/YAML doc into a `KYAML::Any`.
+  # Parse a single K/YAML **input** doc without preserving comments. Use `KYAML.parse_doc` if you want to preserve comments.
   #
-  # Lenient mode: Default, accepts any valid YAML input. Only enforces that mapping keys are scalars, raises `KYAML::NonStringKeyError` on violation
-  #
-  # Strict mode: (`strict: true`) rejects block-style sequences+mappings, block scalars (`|`, `>`), YAML tags, anchors, and aliases. Each raises a dedicated `KYAML::StrictError` subclass.
-  #
-  # Raises `KYAML::ParseError` on malformed YAML.
+  # KYAML **strict** mode rejects YAML block collections, block scalars (`|`, `>`), tags, anchors, and aliases. Strict mode violations raise `KYAML::StrictError` for strict-mode violations.
   def self.parse(input : String | IO, *, strict : Bool = false) : KYAML::Any
     document = YAML::Nodes.parse(input)
     node = document.nodes.first? || empty_scalar
@@ -27,9 +23,9 @@ module KYAML
     )
   end
 
-  # Parses a multi-doc K/YAML stream, block variant. Yields each doc into a `KYAML::Any`.
+  # Yield each K/YAML doc from the **input** stream in order without preserving comments. **strict** validation mode uses the same rules as in `KYAML.parse`.
   #
-  # Each doc is validated independently and only owns its own comments.
+  # YAML syntax errors raise `KYAML::ParseError` before the first yield. Validation failure stops any more yields.
   def self.parse_all(input : String | IO, *, strict : Bool = false, & : KYAML::Any ->) : Nil
     YAML::Nodes.parse_all(input).each do |doc|
       node = doc.nodes.first? || empty_scalar
@@ -44,22 +40,16 @@ module KYAML
     )
   end
 
-  # Parses a multi-doc K/YAML stream, non-block variant.
-  #
-  # Returns an `Array(KYAML::Any)` of all docs.
+  # Parse all K/YAML **input** docs without preserving comments. **strict** validation mode uses the same rules as in `KYAML.parse`
   def self.parse_all(input : String | IO, *, strict : Bool = false) : Array(KYAML::Any)
     docs = [] of KYAML::Any
     parse_all(input, strict: strict) { |doc| docs << doc }
     docs
   end
 
-  # Parse a single K/YAML doc **input**, returning a `KYAML::Doc`.
+  # Parse a single K/YAML **input** doc while preserve comments. **strict** validation mode uses the same rules as in `KYAML.parse`. Use `KYAML.parse` if you do not need comments.
   #
-  # This is the comment-preserving entrypoint. The returned doc exposes its root and comments through detached snapshot copies.
-  #
-  # If you don't need comments then use `KYAML.parse` instead.
-  #
-  # Follows the same lenient/strict modes as `parse`.
+  # The parsed doc's root and comments are read as detached snapshots.
   def self.parse_doc(input : String | IO, *, strict : Bool = false) : KYAML::Doc
     text = input.is_a?(IO) ? input.gets_to_end : input
     yaml_doc = YAML::Nodes.parse(text)
@@ -75,12 +65,9 @@ module KYAML
     )
   end
 
-  # Parses a multi-doc K/YAML **input** stream, block variant.  Yields each doc as a `KYAML::Doc`.
-  # Each doc owns only its own comments, the scanner partitions the full comment list per doc by `---` separator.
+  # Yield each K/YAML doc from the **input** stream in order while preserving comments. **strict** validation mode uses the same rules as in `KYAML.parse`.
   #
-  # Each doc is validated independently, a violation raised in doc N raises immediately and does not yield docs 0..N-1 back to the block.
-  #
-  # If you don't need comments then use `KYAML.parse_all` instead.
+  # YAML syntax errors raise `KYAML::ParseError` before the first yield. Validation failure stops any more yields..
   def self.parse_all_docs(input : String | IO, *, strict : Bool = false, & : KYAML::Doc ->) : Nil
     text = input.is_a?(IO) ? input.gets_to_end : input
     comments = KYAML::CommentScanner.scan(text)
@@ -98,7 +85,6 @@ module KYAML
       doc_buckets[idx] << cmt unless doc_buckets.empty?
     end
 
-    # stop delegating to `parse_all` since we need the per-doc YAML::Nodes::Document for comment classification
     yaml_docs.each_with_index do |yaml_doc, i|
       node = yaml_doc.nodes.first? || empty_scalar
       Validator.validate(node, strict)
@@ -113,19 +99,18 @@ module KYAML
     )
   end
 
-  # Parses a multi-doc K/YAML stream, non-block variant. If you don't need comments then use `KYAML.parse_all` instead.
-  #
-  # Returns an `Array(KYAML::Doc)` of all parsed docs.
+  # Parse all K/YAML **input** docs while preserving comments. **strict** validation mode uses the same rules as in `KYAML.parse`.
   def self.parse_all_docs(input : String | IO, *, strict : Bool = false) : Array(KYAML::Doc)
     docs = [] of KYAML::Doc
     parse_all_docs(input, strict: strict) { |doc| docs << doc }
     docs
   end
 
-  # Returns an empty scalar node.
+  # Return a plain scalar node that resolves to `nil` when a doc has no root.
   #
   # `YAML::Nodes.parse("")` returns a doc with no nodes. To ensure that `KYAML::Any.new(ctx, node)`  parses to `Nil` intead of raising, we have to create a dummy plain scalar node.
-  # Mirrors stdlibs `parse_yaml` helper behavior
+  # Mirrors upstream stdlib's `parse_yaml` helper behavior.
+  # :nodoc:
   private def self.empty_scalar : YAML::Nodes::Scalar
     scalar = YAML::Nodes::Scalar.new("")
     scalar.style = YAML::ScalarStyle::PLAIN
